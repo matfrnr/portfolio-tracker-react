@@ -1,0 +1,94 @@
+# =========================
+# Dependencies
+# =========================
+node_modules/
+
+# =========================
+# Front build / back build
+# =========================
+dist/
+build/
+.out/
+.next/
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Environment variables
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# SQLite / local databases
+# =========================
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# =========================
+# Coverage / tests
+# =========================
+coverage/
+.nyc_output/
+
+# =========================
+# Cache / temp
+# =========================
+.cache/
+.temp/
+.tmp/
+.eslintcache
+.parcel-cache/
+.vite/
+*.tsbuildinfo
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE / editors
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# Local config files
+# =========================
+*.local
+
+# =========================
+# Runtime / uploads
+# =========================
+uploads/
+storage/
+public/uploads/
+
+# =========================
+# Optional generated files
+# =========================
+*.pid
+*.seed
+*.pid.lock
+
+# =========================
+# Vite
+# =========================
+vite.config.timestamp-*
