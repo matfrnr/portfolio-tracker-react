@@ -1,17 +1,14 @@
 import { formatCurrency, formatPercent, formatQty } from '../lib/portfolio'
 
-export default function PositionsTable({ positions, onPriceChange }) {
+export default function PositionsView({ positions, onPriceChange }) {
     return (
-        <section className="panel">
-            <div className="panel-heading">
-                <div>
-                    <p className="eyebrow">Positions</p>
-                    <h2>Positions ouvertes</h2>
-                </div>
+        <div className="card">
+            <div className="card-title">
+                Positions ouvertes — saisir le cours actuel pour calculer le gain/perte
             </div>
 
             {positions.length === 0 ? (
-                <div className="empty-state">Aucune position ouverte pour le moment.</div>
+                <div className="empty">Aucune position ouverte.</div>
             ) : (
                 <div className="table-wrap">
                     <table>
@@ -21,38 +18,36 @@ export default function PositionsTable({ positions, onPriceChange }) {
                                 <th>Qté</th>
                                 <th>PRU</th>
                                 <th>Investi</th>
-                                <th>Cours</th>
-                                <th>Valeur</th>
-                                <th>PV latente</th>
+                                <th>Cours actuel</th>
+                                <th>Gain / Perte</th>
                             </tr>
                         </thead>
                         <tbody>
                             {positions.map((position) => (
                                 <tr key={position.ticker}>
                                     <td>
-                                        <div className="symbol">{position.ticker}</div>
-                                        <div className="muted-cell">{position.name}</div>
+                                        <div className="ticker-sym">{position.ticker}</div>
+                                        <div className="ticker-name">{position.name}</div>
                                     </td>
                                     <td>{formatQty(position.quantity)}</td>
                                     <td>{formatCurrency(position.averageCost)}</td>
                                     <td>{formatCurrency(position.costBasis)}</td>
                                     <td>
                                         <input
-                                            className="table-input"
+                                            className="price-input"
                                             type="number"
                                             min="0"
                                             step="any"
                                             value={position.currentPrice || ''}
-                                            onChange={(e) => onPriceChange(position.ticker, e.target.value)}
-                                            placeholder="0,00"
+                                            onChange={(event) => onPriceChange(position.ticker, event.target.value)}
+                                            placeholder="0.00"
                                         />
                                     </td>
-                                    <td>{formatCurrency(position.marketValue)}</td>
                                     <td>
-                                        <span className={position.unrealizedPnL >= 0 ? 'positive' : 'negative'}>
+                                        <div className={position.unrealizedPnL >= 0 ? 'gain-pos' : 'gain-neg'}>
                                             {formatCurrency(position.unrealizedPnL)}
-                                        </span>
-                                        <div className="muted-cell">{formatPercent(position.unrealizedPct)}</div>
+                                        </div>
+                                        <div className="gain-sub">{formatPercent(position.unrealizedPct)}</div>
                                     </td>
                                 </tr>
                             ))}
@@ -60,6 +55,6 @@ export default function PositionsTable({ positions, onPriceChange }) {
                     </table>
                 </div>
             )}
-        </section>
+        </div>
     )
 }

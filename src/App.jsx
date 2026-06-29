@@ -1,25 +1,22 @@
 import { useMemo, useState } from 'react'
-import { BriefcaseBusiness, Download, LineChart, MoonStar, SunMedium, Upload } from 'lucide-react'
-import TransactionForm from './components/TransactionForm'
-import PositionsTable from './components/PositionsTable'
-import HistoryList from './components/HistoryList'
-import AllocationCard from './components/AllocationCard'
-import PerformanceChart from './components/PerformanceChart'
-import StatCard from './components/StatCard'
-import { buildMonthlySeries, computePortfolio, formatCurrency, uid } from './lib/portfolio'
+import Tabs from './components/Tabs'
+import KpiRow from './components/KpiRow'
+import DashboardView from './components/DashboardView'
+import PositionsView from './components/PositionsView'
+import TransactionView from './components/TransactionView'
+import HistoryView from './components/HistoryView'
+import { usePersistentState } from './hooks/usePersistentState'
+import { computePortfolio, uid } from './lib/portfolio'
 
-const seedTransactions = [
-    { id: uid(), type: 'BUY', ticker: 'MC.PA', name: 'LVMH', date: '2026-02-10', quantity: 3, unitPrice: 712, fees: 1.8, note: 'PEA' },
-    { id: uid(), type: 'BUY', ticker: 'AIR.PA', name: 'Air Liquide', date: '2026-03-15', quantity: 5, unitPrice: 178.4, fees: 1.2, note: 'Renforcement' },
-    { id: uid(), type: 'SELL', ticker: 'AIR.PA', name: 'Air Liquide', date: '2026-05-04', quantity: 1, unitPrice: 185.3, fees: 1.2, note: 'Prise partielle de bénéfice' },
-]
-
-const seedPrices = { 'MC.PA': 735, 'AIR.PA': 182.2 }
+const STORAGE_KEYS = {
+    transactions: 'portfolio-tracker:transactions',
+    prices: 'portfolio-tracker:prices',
+}
 
 export default function App() {
-    const [transactions, setTransactions] = useState(seedTransactions)
-    const [prices, setPrices] = useState(seedPrices)
-    const [theme, setTheme] = useState(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    const [currentTab, setCurrentTab] = useState('dashboard')
+    const [transactions, setTransactions] = usePersistentState(STORAGE_KEYS.transactions, [])
+    const [prices, setPrices] = usePersistentState(STORAGE_KEYS.prices, {})
     const [error, setError] = useState('')
 
     const snapshot = useMemo(() => {
@@ -41,9 +38,7 @@ export default function App() {
         }
     }, [transactions, prices])
 
-    const monthlySeries = useMemo(() => buildMonthlySeries(transactions, prices), [transactions, prices])
-
-    function handleTransactionSubmit(form) {
+    function handleAddTransaction(form) {
         const next = {
             id: uid(),
             type: form.type,
@@ -61,6 +56,11 @@ export default function App() {
         }
 
         setTransactions((current) => [next, ...current])
+        setCurrentTab('history')
+    }
+
+    function handleDeleteTransaction(id) {
+        setTransactions((current) => current.filter((tx) => tx.id !== id))
     }
 
     function handlePriceChange(ticker, value) {
@@ -71,30 +71,28 @@ export default function App() {
         }))
     }
 
-    function handleDelete(id) {
-        setTransactions((current) => current.filter((tx) => tx.id !== id))
-    }
-
-    function handleExport() {
-        const payload = { transactions, prices, exportedAt: new Date().toISOString() }
-        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    function exportJSON() {
+        const data = { transactions, prices, exportedAt: new Date().toISOString() }
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
         const link = document.createElement('a')
-        link.href = URL.createObjectURL(blob)
-        link.download = `portfolio-export-${new Date().toISOString().slice(0, 10)}.json`
+        link.href = url
+        link.download = `portefeuille-${new Date().toISOString().slice(0, 10)}.json`
         link.click()
-        URL.revokeObjectURL(link.href)
+        URL.revokeObjectURL(url)
     }
 
-    function handleImport(event) {
+    function importJSON(event) {
         const file = event.target.files?.[0]
         if (!file) return
         const reader = new FileReader()
         reader.onload = (e) => {
             try {
                 const parsed = JSON.parse(String(e.target?.result || '{}'))
-                if (!Array.isArray(parsed.transactions)) throw new Error('Fichier JSON invalide.')
+                if (!Array.isArray(parsed.transactions)) throw new Error('Format JSON invalide.')
                 setTransactions(parsed.transactions)
                 setPrices(parsed.prices || {})
+                setCurrentTab('dashboard')
             } catch (err) {
                 setError(err.message)
             }
@@ -104,66 +102,42 @@ export default function App() {
     }
 
     return (
-        <div className="app-shell" data-theme={theme}>
-            <header className="topbar">
-                <div className="brand">
-                    <div className="brand-mark" aria-hidden="true">
-                        <BriefcaseBusiness size={18} />
-                    </div>
-                    <div>
-                        <p className="eyebrow">Portfolio tracker</p>
-                        <h1>Suivi de portefeuille</h1>
-                    </div>
+        <div className="container">
+            <div className="header">
+                <div>
+                    <div className="header-title">Portefeuille</div>
+                    <div className="header-name">Mon portefeuille</div>
+                    <div className="header-date">Mis à jour le {new Date().toLocaleDateString('fr-FR')}</div>
                 </div>
-
-                <div className="topbar-actions">
-                    <button className="button secondary" type="button" onClick={handleExport}><Download size={16} />Exporter</button>
-                    <label className="button secondary file-button">
-                        <Upload size={16} />Importer
-                        <input type="file" accept="application/json" onChange={handleImport} />
+                <div className="header-actions">
+                    <button className="btn-ghost" type="button" onClick={exportJSON}>Exporter</button>
+                    <label className="btn-ghost" style={{ cursor: 'pointer' }}>
+                        Importer
+                        <input type="file" accept="application/json" style={{ display: 'none' }} onChange={importJSON} />
                     </label>
-                    <button className="icon-button" type="button" aria-label="Changer de thème" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}>
-                        {theme === 'dark' ? <SunMedium size={18} /> : <MoonStar size={18} />}
-                    </button>
                 </div>
-            </header>
+            </div>
 
-            {error && <div className="alert-error">{error}</div>}
+            <Tabs currentTab={currentTab} onChange={setCurrentTab} />
 
-            <main className="dashboard-grid">
-                <section className="hero-grid">
-                    <StatCard label="Valeur actuelle" value={snapshot.currentValue} delta={snapshot.totalPnL} percentage={snapshot.invested > 0 ? (snapshot.totalPnL / snapshot.invested) * 100 : 0} tone={snapshot.totalPnL >= 0 ? 'positive' : 'negative'} />
-                    <StatCard label="Capital investi" value={snapshot.invested} />
-                    <StatCard label="PV latente" value={snapshot.unrealizedPnL} delta={snapshot.unrealizedPnL} percentage={snapshot.invested > 0 ? (snapshot.unrealizedPnL / snapshot.invested) * 100 : 0} tone={snapshot.unrealizedPnL >= 0 ? 'positive' : 'negative'} />
-                    <StatCard label="PV réalisée" value={snapshot.realizedPnL} delta={snapshot.realizedPnL} tone={snapshot.realizedPnL >= 0 ? 'positive' : 'negative'} />
-                </section>
+            {error ? <div className="card" style={{ color: 'var(--text-danger)' }}>{error}</div> : null}
 
-                <section className="main-column">
-                    <PerformanceChart data={monthlySeries} />
-                    <PositionsTable positions={snapshot.positions} onPriceChange={handlePriceChange} />
-                    <HistoryList transactions={transactions} onDelete={handleDelete} />
-                </section>
+            <div className={currentTab === 'dashboard' ? 'section active' : 'section'}>
+                <KpiRow snapshot={snapshot} />
+                <DashboardView snapshot={snapshot} />
+            </div>
 
-                <aside className="side-column">
-                    <section className="panel note-panel">
-                        <div className="panel-heading">
-                            <div>
-                                <p className="eyebrow">Vue d’ensemble</p>
-                                <h2>État du portefeuille</h2>
-                            </div>
-                            <LineChart size={18} />
-                        </div>
-                        <dl className="summary-list">
-                            <div><dt>Positions</dt><dd>{snapshot.positions.length}</dd></div>
-                            <div><dt>Transactions</dt><dd>{snapshot.transactionCount}</dd></div>
-                            <div><dt>Frais cumulés</dt><dd>{formatCurrency(snapshot.totalFees)}</dd></div>
-                            <div><dt>Prix saisis</dt><dd>{Object.values(prices).filter((v) => v > 0).length}</dd></div>
-                        </dl>
-                    </section>
-                    <AllocationCard positions={snapshot.positions} invested={snapshot.invested} />
-                    <TransactionForm onSubmit={handleTransactionSubmit} />
-                </aside>
-            </main>
+            <div className={currentTab === 'positions' ? 'section active' : 'section'}>
+                <PositionsView positions={snapshot.positions} onPriceChange={handlePriceChange} />
+            </div>
+
+            <div className={currentTab === 'transaction' ? 'section active' : 'section'}>
+                <TransactionView onAddTransaction={handleAddTransaction} />
+            </div>
+
+            <div className={currentTab === 'history' ? 'section active' : 'section'}>
+                <HistoryView transactions={transactions} onDelete={handleDeleteTransaction} />
+            </div>
         </div>
     )
 }
