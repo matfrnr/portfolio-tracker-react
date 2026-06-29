@@ -17,6 +17,35 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/api/prices", async (req, res) => {
+  try {
+    const prices = await prisma.assetPrice.findMany();
+    const pricesMap = prices.reduce((acc, curr) => {
+      acc[curr.ticker] = curr.currentPrice;
+      return acc;
+    }, {});
+    res.json(pricesMap);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Impossible de récupérer les prix." });
+  }
+});
+
+app.post("/api/prices", async (req, res) => {
+  try {
+    const { ticker, price } = req.body;
+    const updated = await prisma.assetPrice.upsert({
+      where: { ticker },
+      update: { currentPrice: Number(price) },
+      create: { ticker, currentPrice: Number(price) },
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ error: "Impossible de mettre à jour le prix." });
+  }
+});
+
 app.get("/api/transactions", async (req, res) => {
   try {
     const transactions = await prisma.transaction.findMany({

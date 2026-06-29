@@ -5,7 +5,6 @@ import DashboardView from './components/DashboardView'
 import PositionsView from './components/PositionsView'
 import TransactionView from './components/TransactionView'
 import HistoryView from './components/HistoryView'
-import { usePersistentState } from './hooks/usePersistentState'
 import { computePortfolio, validateTransaction } from './lib/portfolio'
 import { exportPortfolioJSON, importPortfolioJSON } from './lib/storage'
 import {
@@ -14,10 +13,7 @@ import {
     updateTransaction,
     deleteTransaction,
 } from './api/transactions'
-
-const STORAGE_KEYS = {
-    prices: 'portfolio-tracker:prices',
-}
+import { getPrices, updatePrice } from './api/prices'
 
 const EMPTY_SNAPSHOT = {
     positions: [],
@@ -33,26 +29,30 @@ const EMPTY_SNAPSHOT = {
 export default function App() {
     const [currentTab, setCurrentTab] = useState('dashboard')
     const [transactions, setTransactions] = useState([])
-    const [prices, setPrices] = usePersistentState(STORAGE_KEYS.prices, {})
+    const [prices, setPrices] = useState({})
     const [loading, setLoading] = useState(true)
     const [editingTransaction, setEditingTransaction] = useState(null)
     const [error, setError] = useState('')
 
     useEffect(() => {
-        async function loadTransactions() {
+        async function loadData() {
             try {
                 setLoading(true)
-                const data = await getTransactions()
-                setTransactions(data)
+                const [transactionsData, pricesData] = await Promise.all([
+                    getTransactions(),
+                    getPrices()
+                ])
+                setTransactions(transactionsData)
+                setPrices(pricesData)
                 setError('')
             } catch (err) {
-                setError(err.message || 'Impossible de charger les transactions.')
+                setError(err.message || 'Impossible de charger les donnees.')
             } finally {
                 setLoading(false)
             }
         }
 
-        loadTransactions()
+        loadData()
     }, [])
 
     const snapshot = useMemo(() => {
@@ -93,10 +93,12 @@ export default function App() {
 
         try {
             if (form.currentPrice && form.currentPrice > 0) {
+                const newPrice = Number(form.currentPrice)
                 setPrices((current) => ({
                     ...current,
-                    [payload.ticker]: Number(form.currentPrice),
+                    [payload.ticker]: newPrice,
                 }))
+                await updatePrice(payload.ticker, newPrice)
             }
 
             if (editingTransaction) {
@@ -143,13 +145,20 @@ export default function App() {
         setError('')
     }
 
-    function handlePriceChange(ticker, value) {
+    async function handlePriceChange(ticker, value) {
         const parsed = Number(value)
+        const newPrice = Number.isFinite(parsed) && parsed > 0 ? parsed : 0
 
         setPrices((current) => ({
             ...current,
-            [ticker]: Number.isFinite(parsed) && parsed > 0 ? parsed : 0,
+            [ticker]: newPrice,
         }))
+
+        try {
+            await updatePrice(ticker, newPrice)
+        } catch (err) {
+            setError(err.message || 'Erreur lors de la mise a jour du prix.')
+        }
     }
 
     function handleExport() {
@@ -164,6 +173,11 @@ export default function App() {
             const data = await importPortfolioJSON(file)
             setTransactions(data.transactions)
             setPrices(data.prices)
+
+            for (const [ticker, price] of Object.entries(data.prices)) {
+                await updatePrice(ticker, price)
+            }
+
             setEditingTransaction(null)
             setError('')
             setCurrentTab('dashboard')
