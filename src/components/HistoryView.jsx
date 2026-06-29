@@ -1,6 +1,6 @@
 import { formatCurrency, formatQty } from '../lib/portfolio'
 
-export default function HistoryView({ transactions, onDelete }) {
+export default function HistoryView({ transactions, onDelete, onEdit }) {
     return (
         <div className="card">
             <div className="card-title">Historique des transactions</div>
@@ -23,14 +23,22 @@ export default function HistoryView({ transactions, onDelete }) {
                                 </div>
 
                                 <div className="history-meta">
-                                    {new Date(tx.date).toLocaleDateString('fr-FR')} {tx.note ? `· ${tx.note}` : ''}
+                                    {new Date(tx.date).toLocaleDateString('fr-FR')}
+                                    {tx.note ? ` · ${tx.note}` : ''}
                                 </div>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                 <span style={{ fontWeight: 500 }}>
-                                    {formatCurrency(tx.quantity * tx.unitPrice + (tx.type === 'BUY' ? tx.fees : -tx.fees))}
+                                    {formatCurrency(
+                                        tx.quantity * tx.unitPrice + (tx.type === 'BUY' ? tx.fees : -tx.fees)
+                                    )}
                                 </span>
+
+                                <button className="btn-ghost" type="button" onClick={() => onEdit(tx)}>
+                                    Modifier
+                                </button>
+
                                 <button className="del-btn" type="button" onClick={() => onDelete(tx.id)}>
                                     ×
                                 </button>

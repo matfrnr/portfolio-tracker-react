@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { formatCurrency } from '../lib/portfolio'
 
-const initialForm = {
+const emptyForm = {
     type: 'BUY',
     ticker: '',
     name: '',
@@ -13,8 +13,34 @@ const initialForm = {
     note: '',
 }
 
-export default function TransactionView({ onAddTransaction }) {
-    const [form, setForm] = useState(initialForm)
+export default function TransactionView({
+    onSaveTransaction,
+    editingTransaction,
+    onCancelEdit,
+    currentPrice,
+}) {
+    const [form, setForm] = useState(emptyForm)
+
+    useEffect(() => {
+        if (editingTransaction) {
+            setForm({
+                type: editingTransaction.type,
+                ticker: editingTransaction.ticker,
+                name: editingTransaction.name || '',
+                date: editingTransaction.date,
+                quantity: String(editingTransaction.quantity),
+                unitPrice: String(editingTransaction.unitPrice),
+                currentPrice: currentPrice !== '' ? String(currentPrice) : '',
+                fees: String(editingTransaction.fees ?? 0),
+                note: editingTransaction.note || '',
+            })
+        } else {
+            setForm({
+                ...emptyForm,
+                date: new Date().toISOString().split('T')[0],
+            })
+        }
+    }, [editingTransaction, currentPrice])
 
     const total = useMemo(() => {
         const quantity = Number(form.quantity || 0)
@@ -29,7 +55,8 @@ export default function TransactionView({ onAddTransaction }) {
 
     function handleSubmit(event) {
         event.preventDefault()
-        onAddTransaction({
+
+        onSaveTransaction({
             ...form,
             ticker: form.ticker.trim().toUpperCase(),
             quantity: Number(form.quantity),
@@ -37,12 +64,23 @@ export default function TransactionView({ onAddTransaction }) {
             currentPrice: form.currentPrice === '' ? null : Number(form.currentPrice),
             fees: Number(form.fees || 0),
         })
-        setForm(initialForm)
+    }
+
+    function handleReset() {
+        if (editingTransaction) {
+            onCancelEdit()
+        }
+        setForm({
+            ...emptyForm,
+            date: new Date().toISOString().split('T')[0],
+        })
     }
 
     return (
         <div className="card">
-            <div className="card-title">Enregistrer une transaction</div>
+            <div className="card-title">
+                {editingTransaction ? 'Modifier une transaction' : 'Enregistrer une transaction'}
+            </div>
 
             <div className="type-toggle">
                 <button
@@ -105,7 +143,11 @@ export default function TransactionView({ onAddTransaction }) {
                     </div>
 
                     <div className="form-field">
-                        <label>{form.type === 'BUY' ? "Prix d'achat unitaire (€)" : 'Prix de vente unitaire (€)'}</label>
+                        <label>
+                            {form.type === 'BUY'
+                                ? "Prix d'achat unitaire (€)"
+                                : 'Prix de vente unitaire (€)'}
+                        </label>
                         <input
                             type="number"
                             min="0"
@@ -126,7 +168,9 @@ export default function TransactionView({ onAddTransaction }) {
                             onChange={(event) => updateField('currentPrice', event.target.value)}
                             placeholder="optionnel"
                         />
-                        <span className="hint">Permet de calculer le gain/perte immédiatement</span>
+                        <span className="hint">
+                            Permet de calculer le gain/perte immédiatement
+                        </span>
                     </div>
 
                     <div className="form-field">
@@ -155,15 +199,11 @@ export default function TransactionView({ onAddTransaction }) {
                 </div>
 
                 <div className="btn-row">
-                    <button
-                        type="button"
-                        className="btn-ghost"
-                        onClick={() => setForm(initialForm)}
-                    >
-                        Effacer
+                    <button type="button" className="btn-ghost" onClick={handleReset}>
+                        {editingTransaction ? 'Annuler' : 'Effacer'}
                     </button>
                     <button type="submit" className="btn-primary">
-                        Enregistrer
+                        {editingTransaction ? 'Enregistrer les modifications' : 'Enregistrer'}
                     </button>
                 </div>
             </form>

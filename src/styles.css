@@ -450,3 +450,10 @@ tr:last-child td {
     align-items: flex-start;
   }
 }
+
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
