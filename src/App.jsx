@@ -6,45 +6,23 @@ import PositionsView from './components/PositionsView'
 import TransactionView from './components/TransactionView'
 import HistoryView from './components/HistoryView'
 import { usePersistentState } from './hooks/usePersistentState'
-import { computePortfolio, uid } from './lib/portfolio'
+import { computePortfolio, uid, validateTransaction } from './lib/portfolio'
+import { exportPortfolioJSON, importPortfolioJSON } from './lib/storage'
 
 const STORAGE_KEYS = {
     transactions: 'portfolio-tracker:transactions',
     prices: 'portfolio-tracker:prices',
 }
 
-function validateTransaction(form, transactions) {
-    if (!form.ticker?.trim()) return 'Le ticker est obligatoire.'
-    if (!form.date) return 'La date est obligatoire.'
-    if (!Number.isFinite(form.quantity) || form.quantity <= 0) {
-        return 'La quantité doit être supérieure à 0.'
-    }
-    if (!Number.isFinite(form.unitPrice) || form.unitPrice <= 0) {
-        return 'Le prix unitaire doit être supérieur à 0.'
-    }
-    if (!Number.isFinite(form.fees) || form.fees < 0) {
-        return 'Les frais ne peuvent pas être négatifs.'
-    }
-
-    if (form.type === 'SELL') {
-        const ticker = form.ticker.trim().toUpperCase()
-
-        const bought = transactions
-            .filter((tx) => tx.ticker === ticker && tx.type === 'BUY')
-            .reduce((sum, tx) => sum + Number(tx.quantity), 0)
-
-        const sold = transactions
-            .filter((tx) => tx.ticker === ticker && tx.type === 'SELL')
-            .reduce((sum, tx) => sum + Number(tx.quantity), 0)
-
-        const available = bought - sold
-
-        if (form.quantity > available) {
-            return `Vente impossible : tu détiens ${available} ${ticker}.`
-        }
-    }
-
-    return null
+const EMPTY_SNAPSHOT = {
+    positions: [],
+    invested: 0,
+    currentValue: 0,
+    unrealizedPnL: 0,
+    realizedPnL: 0,
+    totalPnL: 0,
+    totalFees: 0,
+    transactionCount: 0,
 }
 
 export default function App() {
@@ -59,13 +37,7 @@ export default function App() {
             return computePortfolio(transactions, prices)
         } catch (err) {
             return {
-                positions: [],
-                invested: 0,
-                currentValue: 0,
-                unrealizedPnL: 0,
-                realizedPnL: 0,
-                totalPnL: 0,
-                totalFees: 0,
+                ...EMPTY_SNAPSHOT,
                 transactionCount: transactions.length,
             }
         }
@@ -118,6 +90,7 @@ export default function App() {
         if (editingTransaction?.id === id) {
             setEditingTransaction(null)
         }
+
         setTransactions((current) => current.filter((tx) => tx.id !== id))
     }
 
@@ -134,48 +107,33 @@ export default function App() {
 
     function handlePriceChange(ticker, value) {
         const parsed = Number(value)
+
         setPrices((current) => ({
             ...current,
             [ticker]: Number.isFinite(parsed) && parsed > 0 ? parsed : 0,
         }))
     }
 
-    function exportJSON() {
-        const data = { transactions, prices, exportedAt: new Date().toISOString() }
-        const blob = new Blob([JSON.stringify(data, null, 2)], {
-            type: 'application/json',
-        })
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `portefeuille-${new Date().toISOString().slice(0, 10)}.json`
-        link.click()
-        URL.revokeObjectURL(url)
+    function handleExport() {
+        exportPortfolioJSON({ transactions, prices })
     }
 
-    function importJSON(event) {
+    async function handleImport(event) {
         const file = event.target.files?.[0]
         if (!file) return
 
-        const reader = new FileReader()
-        reader.onload = (e) => {
-            try {
-                const parsed = JSON.parse(String(e.target?.result || '{}'))
-                if (!Array.isArray(parsed.transactions)) {
-                    throw new Error('Format JSON invalide.')
-                }
-                setTransactions(parsed.transactions)
-                setPrices(parsed.prices || {})
-                setEditingTransaction(null)
-                setError('')
-                setCurrentTab('dashboard')
-            } catch (err) {
-                setError(err.message)
-            }
+        try {
+            const data = await importPortfolioJSON(file)
+            setTransactions(data.transactions)
+            setPrices(data.prices)
+            setEditingTransaction(null)
+            setError('')
+            setCurrentTab('dashboard')
+        } catch (err) {
+            setError(err.message)
+        } finally {
+            event.target.value = ''
         }
-
-        reader.readAsText(file)
-        event.target.value = ''
     }
 
     return (
@@ -190,16 +148,17 @@ export default function App() {
                 </div>
 
                 <div className="header-actions">
-                    <button className="btn-ghost" type="button" onClick={exportJSON}>
+                    <button className="btn-ghost" type="button" onClick={handleExport}>
                         Exporter
                     </button>
+
                     <label className="btn-ghost" style={{ cursor: 'pointer' }}>
                         Importer
                         <input
                             type="file"
                             accept="application/json"
                             style={{ display: 'none' }}
-                            onChange={importJSON}
+                            onChange={handleImport}
                         />
                     </label>
                 </div>

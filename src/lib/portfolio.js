@@ -18,94 +18,148 @@ export function formatQty(value) {
 }
 
 export function uid() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function computePortfolio(transactions, prices) {
-  const sorted = [...transactions].sort(
-    (a, b) => new Date(a.date) - new Date(b.date),
-  );
+export function normalizeTicker(value) {
+  return value?.trim().toUpperCase() || "";
+}
+
+export function getAvailableQuantity(transactions, ticker) {
+  const symbol = normalizeTicker(ticker);
+
+  const bought = transactions
+    .filter((tx) => normalizeTicker(tx.ticker) === symbol && tx.type === "BUY")
+    .reduce((sum, tx) => sum + Number(tx.quantity), 0);
+
+  const sold = transactions
+    .filter((tx) => normalizeTicker(tx.ticker) === symbol && tx.type === "SELL")
+    .reduce((sum, tx) => sum + Number(tx.quantity), 0);
+
+  return bought - sold;
+}
+
+export function validateTransaction(form, transactions) {
+  const ticker = normalizeTicker(form.ticker);
+  const quantity = Number(form.quantity);
+  const unitPrice = Number(form.unitPrice);
+  const fees = Number(form.fees || 0);
+
+  if (!ticker) return "Le ticker est obligatoire.";
+  if (!form.date) return "La date est obligatoire.";
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return "La quantité doit être supérieure à 0.";
+  }
+  if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+    return "Le prix unitaire doit être supérieur à 0.";
+  }
+  if (!Number.isFinite(fees) || fees < 0) {
+    return "Les frais ne peuvent pas être négatifs.";
+  }
+
+  if (form.type === "SELL") {
+    const available = getAvailableQuantity(transactions, ticker);
+    if (quantity > available) {
+      return `Vente impossible : tu détiens ${available} ${ticker}.`;
+    }
+  }
+
+  return null;
+}
+
+function sortTransactionsByDate(transactions) {
+  return [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
+function buildPositions(transactions) {
   const positionsMap = new Map();
   let realizedPnL = 0;
   let totalFees = 0;
 
-  for (const tx of sorted) {
-    const key = tx.ticker.trim().toUpperCase();
-    const current = positionsMap.get(key) || {
-      ticker: key,
-      name: tx.name?.trim() || key,
+  for (const tx of sortTransactionsByDate(transactions)) {
+    const ticker = normalizeTicker(tx.ticker);
+    const current = positionsMap.get(ticker) || {
+      ticker,
+      name: tx.name?.trim() || ticker,
       quantity: 0,
       costBasis: 0,
-      realizedPnL: 0,
-      fees: 0,
     };
 
-    const qty = Number(tx.quantity);
+    const quantity = Number(tx.quantity);
     const unitPrice = Number(tx.unitPrice);
     const fees = Number(tx.fees || 0);
+
     totalFees += fees;
-    current.fees += fees;
-    if (tx.name?.trim()) current.name = tx.name.trim();
 
     if (tx.type === "BUY") {
-      current.costBasis += qty * unitPrice + fees;
-      current.quantity += qty;
-    }
-
-    if (tx.type === "SELL") {
-      if (qty > current.quantity) {
-        throw new Error(`La vente de ${key} dépasse la quantité détenue.`);
+      current.quantity += quantity;
+      current.costBasis += quantity * unitPrice + fees;
+    } else {
+      if (quantity > current.quantity) {
+        throw new Error(`La vente de ${ticker} dépasse la quantité détenue.`);
       }
+
       const avgCost =
         current.quantity > 0 ? current.costBasis / current.quantity : 0;
-      const removedCost = avgCost * qty;
-      const proceeds = qty * unitPrice - fees;
-      const pnl = proceeds - removedCost;
-      current.quantity -= qty;
+      const proceeds = quantity * unitPrice - fees;
+      const removedCost = avgCost * quantity;
+
+      realizedPnL += proceeds - removedCost;
+      current.quantity -= quantity;
       current.costBasis -= removedCost;
-      current.realizedPnL += pnl;
-      realizedPnL += pnl;
     }
 
-    positionsMap.set(key, current);
+    if (tx.name?.trim()) {
+      current.name = tx.name.trim();
+    }
+
+    positionsMap.set(ticker, current);
   }
 
-  const positions = [...positionsMap.values()]
-    .filter((position) => position.quantity > 0)
-    .map((position) => {
-      const currentPrice = Number(prices[position.ticker] || 0);
-      const marketValue =
-        currentPrice > 0
-          ? currentPrice * position.quantity
-          : position.costBasis;
-      const unrealizedPnL = marketValue - position.costBasis;
+  return {
+    rawPositions: [...positionsMap.values()],
+    realizedPnL,
+    totalFees,
+  };
+}
+
+function enrichPositions(rawPositions, prices) {
+  return rawPositions
+    .filter((item) => item.quantity > 0)
+    .map((item) => {
+      const currentPrice = Number(prices[item.ticker] || 0);
       const averageCost =
-        position.quantity > 0 ? position.costBasis / position.quantity : 0;
+        item.quantity > 0 ? item.costBasis / item.quantity : 0;
+      const marketValue =
+        currentPrice > 0 ? currentPrice * item.quantity : item.costBasis;
+      const unrealizedPnL = marketValue - item.costBasis;
       const unrealizedPct =
-        position.costBasis > 0 ? (unrealizedPnL / position.costBasis) * 100 : 0;
+        item.costBasis > 0 ? (unrealizedPnL / item.costBasis) * 100 : 0;
 
       return {
-        ...position,
+        ...item,
         currentPrice,
         averageCost,
         marketValue,
         unrealizedPnL,
         unrealizedPct,
-        allocationBase: position.costBasis,
       };
-    })
-    .sort((a, b) => b.marketValue - a.marketValue);
+    });
+}
 
-  const invested = positions.reduce(
-    (sum, position) => sum + position.costBasis,
-    0,
-  );
+export function computePortfolio(transactions, prices) {
+  const { rawPositions, realizedPnL, totalFees } = buildPositions(transactions);
+  const positions = enrichPositions(rawPositions, prices);
+
+  const invested = positions.reduce((sum, item) => sum + item.costBasis, 0);
   const currentValue = positions.reduce(
-    (sum, position) => sum + position.marketValue,
+    (sum, item) => sum + item.marketValue,
     0,
   );
   const unrealizedPnL = currentValue - invested;
-  const totalPnL = realizedPnL + unrealizedPnL;
 
   return {
     positions,
@@ -113,53 +167,8 @@ export function computePortfolio(transactions, prices) {
     currentValue,
     unrealizedPnL,
     realizedPnL,
-    totalPnL,
+    totalPnL: unrealizedPnL + realizedPnL,
     totalFees,
     transactionCount: transactions.length,
   };
-}
-
-export function buildMonthlySeries(transactions, prices) {
-  const now = new Date();
-  const months = [];
-
-  for (let i = 11; i >= 0; i -= 1) {
-    const cursor = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
-    const monthTransactions = transactions.filter(
-      (tx) => new Date(tx.date) <= cursor,
-    );
-    let invested = 0;
-
-    for (const tx of monthTransactions) {
-      const qty = Number(tx.quantity);
-      const unitPrice = Number(tx.unitPrice);
-      const fees = Number(tx.fees || 0);
-      invested +=
-        tx.type === "BUY" ? qty * unitPrice + fees : -(qty * unitPrice - fees);
-    }
-
-    months.push({
-      label: new Date(
-        now.getFullYear(),
-        now.getMonth() - i,
-        1,
-      ).toLocaleDateString("fr-FR", {
-        month: "short",
-        year: "2-digit",
-      }),
-      invested: Math.max(0, invested),
-    });
-  }
-
-  const snapshot = computePortfolio(transactions, prices);
-  const endInvested = months[months.length - 1]?.invested || 0;
-  const endValue = snapshot.currentValue || 0;
-
-  return months.map((month) => ({
-    ...month,
-    value:
-      endInvested > 0
-        ? (month.invested / endInvested) * endValue
-        : month.invested,
-  }));
 }
