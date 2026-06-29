@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Tabs from './components/Tabs'
 import KpiRow from './components/KpiRow'
 import DashboardView from './components/DashboardView'
@@ -6,11 +6,16 @@ import PositionsView from './components/PositionsView'
 import TransactionView from './components/TransactionView'
 import HistoryView from './components/HistoryView'
 import { usePersistentState } from './hooks/usePersistentState'
-import { computePortfolio, uid, validateTransaction } from './lib/portfolio'
+import { computePortfolio, validateTransaction } from './lib/portfolio'
 import { exportPortfolioJSON, importPortfolioJSON } from './lib/storage'
+import {
+    getTransactions,
+    createTransaction,
+    updateTransaction,
+    deleteTransaction,
+} from './api/transactions'
 
 const STORAGE_KEYS = {
-    transactions: 'portfolio-tracker:transactions',
     prices: 'portfolio-tracker:prices',
 }
 
@@ -27,10 +32,28 @@ const EMPTY_SNAPSHOT = {
 
 export default function App() {
     const [currentTab, setCurrentTab] = useState('dashboard')
-    const [transactions, setTransactions] = usePersistentState(STORAGE_KEYS.transactions, [])
+    const [transactions, setTransactions] = useState([])
     const [prices, setPrices] = usePersistentState(STORAGE_KEYS.prices, {})
+    const [loading, setLoading] = useState(true)
     const [editingTransaction, setEditingTransaction] = useState(null)
     const [error, setError] = useState('')
+
+    useEffect(() => {
+        async function loadTransactions() {
+            try {
+                setLoading(true)
+                const data = await getTransactions()
+                setTransactions(data)
+                setError('')
+            } catch (err) {
+                setError(err.message || 'Impossible de charger les transactions.')
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        loadTransactions()
+    }, [])
 
     const snapshot = useMemo(() => {
         try {
@@ -43,7 +66,7 @@ export default function App() {
         }
     }, [transactions, prices])
 
-    function handleSaveTransaction(form) {
+    async function handleSaveTransaction(form) {
         const baseTransactions = editingTransaction
             ? transactions.filter((tx) => tx.id !== editingTransaction.id)
             : transactions
@@ -57,7 +80,6 @@ export default function App() {
         }
 
         const payload = {
-            id: editingTransaction ? editingTransaction.id : uid(),
             type: form.type,
             ticker: form.ticker.trim().toUpperCase(),
             name: form.name?.trim() || form.ticker.trim().toUpperCase(),
@@ -66,32 +88,48 @@ export default function App() {
             unitPrice: Number(form.unitPrice),
             fees: Number(form.fees || 0),
             note: form.note?.trim() || '',
+            currentPrice: form.currentPrice ? Number(form.currentPrice) : null,
         }
 
-        if (form.currentPrice && form.currentPrice > 0) {
-            setPrices((current) => ({
-                ...current,
-                [payload.ticker]: Number(form.currentPrice),
-            }))
+        try {
+            if (form.currentPrice && form.currentPrice > 0) {
+                setPrices((current) => ({
+                    ...current,
+                    [payload.ticker]: Number(form.currentPrice),
+                }))
+            }
+
+            if (editingTransaction) {
+                await updateTransaction(editingTransaction.id, payload)
+                const refreshed = await getTransactions()
+                setTransactions(refreshed)
+            } else {
+                const created = await createTransaction(payload)
+                setTransactions((current) => [created, ...current])
+            }
+
+            setEditingTransaction(null)
+            setError('')
+            setCurrentTab('history')
+        } catch (err) {
+            setError(err.message || 'Erreur lors de l’enregistrement.')
+            setCurrentTab('transaction')
         }
-
-        setTransactions((current) =>
-            editingTransaction
-                ? current.map((tx) => (tx.id === editingTransaction.id ? payload : tx))
-                : [payload, ...current]
-        )
-
-        setEditingTransaction(null)
-        setError('')
-        setCurrentTab('history')
     }
 
-    function handleDeleteTransaction(id) {
-        if (editingTransaction?.id === id) {
-            setEditingTransaction(null)
-        }
+    async function handleDeleteTransaction(id) {
+        try {
+            await deleteTransaction(id)
 
-        setTransactions((current) => current.filter((tx) => tx.id !== id))
+            if (editingTransaction?.id === id) {
+                setEditingTransaction(null)
+            }
+
+            setTransactions((current) => current.filter((tx) => tx.id !== id))
+            setError('')
+        } catch (err) {
+            setError(err.message || 'Erreur lors de la suppression.')
+        }
     }
 
     function handleEditTransaction(transaction) {
@@ -165,6 +203,10 @@ export default function App() {
             </div>
 
             <Tabs currentTab={currentTab} onChange={setCurrentTab} />
+
+            {loading ? (
+                <div className="card">Chargement des transactions...</div>
+            ) : null}
 
             {error ? (
                 <div className="card" style={{ color: 'var(--text-danger)' }}>

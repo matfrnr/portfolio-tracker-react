@@ -1,0 +1,28 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Transaction {
+  id        String   @id @default(cuid())
+  type      String
+  ticker    String
+  name      String
+  date      DateTime
+  quantity  Float
+  unitPrice Float
+  fees      Float    @default(0)
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AssetPrice {
+  ticker       String   @id
+  currentPrice Float
+  updatedAt    DateTime @updatedAt
+}
