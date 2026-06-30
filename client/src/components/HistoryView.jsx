@@ -1,15 +1,43 @@
+import { useMemo, useState } from 'react'
 import { formatCurrency, formatQty } from '../lib/portfolio'
 
 export default function HistoryView({ transactions, onDelete, onEdit }) {
+    const [historyTab, setHistoryTab] = useState('BUY')
+
+    const filteredTransactions = useMemo(() => {
+        return [...transactions]
+            .filter((tx) => tx.type === historyTab)
+            .sort((a, b) => new Date(b.date) - new Date(a.date))
+    }, [transactions, historyTab])
+
     return (
         <div className="card">
             <div className="card-title">Historique des transactions</div>
 
-            {transactions.length === 0 ? (
-                <div className="empty">Aucune transaction enregistrée.</div>
+            <div className="type-toggle" style={{ marginBottom: '12px' }}>
+                <button
+                    type="button"
+                    className={historyTab === 'BUY' ? 'type-btn active' : 'type-btn'}
+                    onClick={() => setHistoryTab('BUY')}
+                >
+                    Achats
+                </button>
+                <button
+                    type="button"
+                    className={historyTab === 'SELL' ? 'type-btn active' : 'type-btn'}
+                    onClick={() => setHistoryTab('SELL')}
+                >
+                    Ventes
+                </button>
+            </div>
+
+            {filteredTransactions.length === 0 ? (
+                <div className="empty">
+                    Aucune transaction {historyTab === 'BUY' ? "d'achat" : 'de vente'} enregistrée.
+                </div>
             ) : (
                 <div>
-                    {transactions.map((tx) => (
+                    {filteredTransactions.map((tx) => (
                         <div key={tx.id} className="history-row">
                             <div>
                                 <div>
