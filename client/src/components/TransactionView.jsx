@@ -46,7 +46,9 @@ export default function TransactionView({
         const quantity = Number(form.quantity || 0)
         const unitPrice = Number(form.unitPrice || 0)
         const fees = Number(form.fees || 0)
-        return quantity * unitPrice + fees
+        const gross = quantity * unitPrice
+
+        return form.type === 'SELL' ? gross - fees : gross + fees
     }, [form])
 
     function updateField(name, value) {
@@ -195,7 +197,8 @@ export default function TransactionView({
                 </div>
 
                 <div className="total-preview">
-                    Total : <span>{formatCurrency(total)}</span>
+                    {form.type === 'SELL' ? 'Montant net :' : 'Coût total :'}{' '}
+                    <span>{formatCurrency(total)}</span>
                 </div>
 
                 <div className="btn-row">

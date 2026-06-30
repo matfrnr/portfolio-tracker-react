@@ -60,12 +60,12 @@ export function validateTransaction(form, transactions) {
     return "Les frais ne peuvent pas être négatifs.";
   }
 
-  if (form.type === "SELL") {
-    const available = getAvailableQuantity(transactions, ticker);
-    if (quantity > available) {
-      return `Vente impossible : tu détiens ${available} ${ticker}.`;
-    }
-  }
+  // if (form.type === "SELL") {
+  //   const available = getAvailableQuantity(transactions, ticker);
+  //   if (quantity > available) {
+  //     return `Vente impossible : tu détiens ${available} ${ticker}.`;
+  //   }
+  // }
 
   return null;
 }
@@ -99,17 +99,18 @@ function buildPositions(transactions) {
       current.costBasis += quantity * unitPrice + fees;
     } else {
       if (quantity > current.quantity) {
-        throw new Error(`La vente de ${ticker} dépasse la quantité détenue.`);
+        current.quantity -= quantity;
+        current.costBasis = 0;
+      } else {
+        const avgCost =
+          current.quantity > 0 ? current.costBasis / current.quantity : 0;
+        const proceeds = quantity * unitPrice - fees;
+        const removedCost = avgCost * quantity;
+
+        realizedPnL += proceeds - removedCost;
+        current.quantity -= quantity;
+        current.costBasis -= removedCost;
       }
-
-      const avgCost =
-        current.quantity > 0 ? current.costBasis / current.quantity : 0;
-      const proceeds = quantity * unitPrice - fees;
-      const removedCost = avgCost * quantity;
-
-      realizedPnL += proceeds - removedCost;
-      current.quantity -= quantity;
-      current.costBasis -= removedCost;
     }
 
     if (tx.name?.trim()) {
