@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import Tabs from './components/Tabs'
 import KpiRow from './components/KpiRow'
 import DashboardView from './components/DashboardView'
@@ -13,17 +13,31 @@ import {
     updateTransaction,
     deleteTransaction,
 } from './api/transactions'
-import { getPrices, updatePrice } from './api/prices'
+import { getPrices, updatePrice, fetchLiveQuotes } from './api/prices'
+import {
+    Download,
+    Upload,
+    RefreshCw,
+    CheckCircle,
+    AlertCircle,
+    X,
+    TrendingUp,
+    Briefcase,
+} from 'lucide-react'
 
 const EMPTY_SNAPSHOT = {
     positions: [],
     invested: 0,
     currentValue: 0,
     unrealizedPnL: 0,
+    unrealizedPct: 0,
     realizedPnL: 0,
     totalPnL: 0,
+    totalPnLPct: 0,
     totalFees: 0,
     transactionCount: 0,
+    topPerformer: null,
+    worstPerformer: null,
 }
 
 export default function App() {
@@ -31,34 +45,93 @@ export default function App() {
     const [transactions, setTransactions] = useState([])
     const [prices, setPrices] = useState({})
     const [loading, setLoading] = useState(true)
+    const [isRefreshing, setIsRefreshing] = useState(false)
+    const [lastRefreshTime, setLastRefreshTime] = useState('')
     const [editingTransaction, setEditingTransaction] = useState(null)
-    const [error, setError] = useState('')
+    const [prefillData, setPrefillData] = useState(null)
+    const [toast, setToast] = useState(null) // { message, type: 'success' | 'error' }
 
+    const showToast = useCallback((message, type = 'success') => {
+        setToast({ message, type })
+        setTimeout(() => {
+            setToast((current) => (current?.message === message ? null : current))
+        }, 4000)
+    }, [])
+
+    // Rafraîchir les cours en direct pour tous les tickers
+    const refreshQuotesForTickers = useCallback(
+        async (tickersList) => {
+            if (!tickersList || tickersList.length === 0) return
+            try {
+                setIsRefreshing(true)
+                const uniqueTickers = Array.from(
+                    new Set(tickersList.map((t) => t.trim().toUpperCase())),
+                ).filter(Boolean)
+
+                if (uniqueTickers.length === 0) return
+
+                const quotesMap = await fetchLiveQuotes(uniqueTickers)
+                const newPrices = {}
+
+                for (const [sym, data] of Object.entries(quotesMap)) {
+                    if (data?.price) {
+                        newPrices[sym] = data.price
+                    }
+                }
+
+                if (Object.keys(newPrices).length > 0) {
+                    setPrices((prev) => ({ ...prev, ...newPrices }))
+                    const now = new Date()
+                    setLastRefreshTime(
+                        now.toLocaleTimeString('fr-FR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                        }),
+                    )
+                }
+            } catch (err) {
+                console.warn('Erreur lors du rafraîchissement des cours:', err)
+            } finally {
+                setIsRefreshing(false)
+            }
+        },
+        [],
+    )
+
+    // Chargement initial des données
     useEffect(() => {
         async function loadData() {
             try {
                 setLoading(true)
                 const [transactionsData, pricesData] = await Promise.all([
                     getTransactions(),
-                    getPrices()
+                    getPrices(),
                 ])
                 setTransactions(transactionsData)
                 setPrices(pricesData)
-                setError('')
+
+                // Rafraîchir immédiatement les cours des positions existantes
+                const allTickers = transactionsData.map((tx) => tx.ticker)
+                if (allTickers.length > 0) {
+                    refreshQuotesForTickers(allTickers)
+                }
             } catch (err) {
-                setError(err.message || 'Impossible de charger les donnees.')
+                showToast(err.message || 'Impossible de charger les données.', 'error')
             } finally {
                 setLoading(false)
             }
         }
 
         loadData()
-    }, [])
+    }, [refreshQuotesForTickers, showToast])
 
+    // Calcul du portefeuille
     const snapshot = useMemo(() => {
         try {
             return computePortfolio(transactions, prices)
         } catch (err) {
+            console.error('Erreur calcul portefeuille:', err)
             return {
                 ...EMPTY_SNAPSHOT,
                 transactionCount: transactions.length,
@@ -66,16 +139,27 @@ export default function App() {
         }
     }, [transactions, prices])
 
-    async function handleSaveTransaction(form) {
-        const baseTransactions = editingTransaction
-            ? transactions.filter((tx) => tx.id !== editingTransaction.id)
-            : transactions
+    // Bouton de rafraîchissement global
+    async function handleManualRefresh() {
+        const allTickers = Array.from(new Set(transactions.map((tx) => tx.ticker)))
+        if (allTickers.length === 0) {
+            showToast('Aucun ticker à actualiser pour le moment.', 'success')
+            return
+        }
+        await refreshQuotesForTickers(allTickers)
+        showToast('Cours de bourse actualisés avec succès !', 'success')
+    }
 
-        const validationError = validateTransaction(form, baseTransactions)
+    // Sauvegarde (Création / Édition)
+    async function handleSaveTransaction(form) {
+        const validationError = validateTransaction(
+            form,
+            transactions,
+            editingTransaction ? editingTransaction.id : null,
+        )
 
         if (validationError) {
-            setError(validationError)
-            setCurrentTab('transaction')
+            showToast(validationError, 'error')
             return
         }
 
@@ -88,16 +172,12 @@ export default function App() {
             unitPrice: Number(form.unitPrice),
             fees: Number(form.fees || 0),
             note: form.note?.trim() || '',
-            currentPrice: form.currentPrice ? Number(form.currentPrice) : null,
         }
 
         try {
-            if (form.currentPrice && form.currentPrice > 0) {
+            if (form.currentPrice && Number(form.currentPrice) > 0) {
                 const newPrice = Number(form.currentPrice)
-                setPrices((current) => ({
-                    ...current,
-                    [payload.ticker]: newPrice,
-                }))
+                setPrices((curr) => ({ ...curr, [payload.ticker]: newPrice }))
                 await updatePrice(payload.ticker, newPrice)
             }
 
@@ -105,66 +185,88 @@ export default function App() {
                 await updateTransaction(editingTransaction.id, payload)
                 const refreshed = await getTransactions()
                 setTransactions(refreshed)
+                showToast('Transaction modifiée avec succès !', 'success')
             } else {
                 const created = await createTransaction(payload)
-                setTransactions((current) => [created, ...current])
+                setTransactions((curr) => [created, ...curr])
+                showToast('Transaction enregistrée avec succès !', 'success')
             }
 
+            // Mettre à jour les cours
+            refreshQuotesForTickers([payload.ticker])
+
             setEditingTransaction(null)
-            setError('')
-            setCurrentTab('history')
+            setPrefillData(null)
+            setCurrentTab('positions')
         } catch (err) {
-            setError(err.message || 'Erreur lors de l’enregistrement.')
-            setCurrentTab('transaction')
+            showToast(err.message || "Erreur lors de l'enregistrement.", 'error')
         }
     }
 
+    // Suppression
     async function handleDeleteTransaction(id) {
         try {
             await deleteTransaction(id)
-
             if (editingTransaction?.id === id) {
                 setEditingTransaction(null)
             }
-
-            setTransactions((current) => current.filter((tx) => tx.id !== id))
-            setError('')
+            setTransactions((curr) => curr.filter((tx) => tx.id !== id))
+            showToast('Transaction supprimée.', 'success')
         } catch (err) {
-            setError(err.message || 'Erreur lors de la suppression.')
+            showToast(err.message || 'Erreur lors de la suppression.', 'error')
         }
     }
 
+    // Modification
     function handleEditTransaction(transaction) {
         setEditingTransaction(transaction)
-        setError('')
+        setPrefillData(null)
         setCurrentTab('transaction')
     }
 
     function handleCancelEdit() {
         setEditingTransaction(null)
-        setError('')
+        setPrefillData(null)
     }
 
-    async function handlePriceChange(ticker, value) {
-        const parsed = Number(value)
-        const newPrice = Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+    // Action rapide depuis les positions (Achat / Vente préremplis)
+    function handleQuickAction(type, data) {
+        setEditingTransaction(null)
+        setPrefillData({
+            type,
+            ticker: data.ticker,
+            name: data.name,
+            currentPrice: data.currentPrice,
+        })
+        setCurrentTab('transaction')
+    }
 
-        setPrices((current) => ({
-            ...current,
+    // Changement manuel de cours dans le tableau
+    async function handlePriceChange(ticker, newPrice) {
+        setPrices((curr) => ({
+            ...curr,
             [ticker]: newPrice,
         }))
 
         try {
             await updatePrice(ticker, newPrice)
+            showToast(`Cours de ${ticker} mis à jour : ${newPrice} €`, 'success')
         } catch (err) {
-            setError(err.message || 'Erreur lors de la mise a jour du prix.')
+            showToast(err.message || 'Erreur lors de la mise à jour du cours.', 'error')
         }
     }
 
+    // Exportation
     function handleExport() {
-        exportPortfolioJSON({ transactions, prices })
+        try {
+            exportPortfolioJSON({ transactions, prices })
+            showToast('Fichier de portefeuille exporté avec succès !', 'success')
+        } catch (err) {
+            showToast("Erreur lors de l'exportation.", 'error')
+        }
     }
 
+    // Importation
     async function handleImport(event) {
         const file = event.target.files?.[0]
         if (!file) return
@@ -174,88 +276,160 @@ export default function App() {
             setTransactions(data.transactions)
             setPrices(data.prices)
 
+            // Sauvegarder les prix importés en base
             for (const [ticker, price] of Object.entries(data.prices)) {
                 await updatePrice(ticker, price)
             }
 
             setEditingTransaction(null)
-            setError('')
+            setPrefillData(null)
+            showToast(`${data.transactions.length} transactions importées avec succès !`, 'success')
             setCurrentTab('dashboard')
+
+            // Actualiser les cours
+            const allTickers = data.transactions.map((tx) => tx.ticker)
+            refreshQuotesForTickers(allTickers)
         } catch (err) {
-            setError(err.message)
+            showToast(err.message || "Fichier d'importation invalide.", 'error')
         } finally {
             event.target.value = ''
         }
     }
 
     return (
-        <div className="container">
-            <div className="header">
-                <div>
-                    <div className="header-title">Portefeuille</div>
-                    <div className="header-name">Mon portefeuille</div>
-                    <div className="header-date">
-                        Mis à jour le {new Date().toLocaleDateString('fr-FR')}
+        <div className="app-layout">
+            {/* Header principal */}
+            <header className="app-header">
+                <div className="header-container">
+                    <div className="brand-group">
+                        <div className="brand-icon">
+                            <Briefcase size={22} />
+                        </div>
+                        <div>
+                            <div className="brand-title">Portfolio Tracker</div>
+                            <div className="brand-subtitle">
+                                Gestion & suivi de performance d'actifs boursiers
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="header-controls">
+                        <button
+                            type="button"
+                            className="btn-header-action"
+                            onClick={handleManualRefresh}
+                            disabled={isRefreshing}
+                            title="Actualiser tous les cours en direct"
+                        >
+                            <RefreshCw size={15} className={isRefreshing ? 'spin-icon' : ''} />
+                            <span>{isRefreshing ? 'Actualisation...' : 'Actualiser les cours'}</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            className="btn-header-action"
+                            onClick={handleExport}
+                            title="Exporter en JSON"
+                        >
+                            <Download size={15} />
+                            <span>Exporter</span>
+                        </button>
+
+                        <label className="btn-header-action import-label" title="Importer depuis un fichier JSON">
+                            <Upload size={15} />
+                            <span>Importer</span>
+                            <input
+                                type="file"
+                                accept="application/json"
+                                style={{ display: 'none' }}
+                                onChange={handleImport}
+                            />
+                        </label>
                     </div>
                 </div>
+            </header>
 
-                <div className="header-actions">
-                    <button className="btn-ghost" type="button" onClick={handleExport}>
-                        Exporter
+            {/* Notification Toast */}
+            {toast && (
+                <div className={`toast-notification ${toast.type}`}>
+                    {toast.type === 'error' ? (
+                        <AlertCircle size={18} className="toast-icon" />
+                    ) : (
+                        <CheckCircle size={18} className="toast-icon" />
+                    )}
+                    <span className="toast-message">{toast.message}</span>
+                    <button
+                        type="button"
+                        className="toast-close"
+                        onClick={() => setToast(null)}
+                    >
+                        <X size={14} />
                     </button>
-
-                    <label className="btn-ghost" style={{ cursor: 'pointer' }}>
-                        Importer
-                        <input
-                            type="file"
-                            accept="application/json"
-                            style={{ display: 'none' }}
-                            onChange={handleImport}
-                        />
-                    </label>
                 </div>
-            </div>
+            )}
 
-            <Tabs currentTab={currentTab} onChange={setCurrentTab} />
-
-            {loading ? (
-                <div className="card">Chargement des transactions...</div>
-            ) : null}
-
-            {error ? (
-                <div className="card" style={{ color: 'var(--text-danger)' }}>
-                    {error}
-                </div>
-            ) : null}
-
-            <div className={currentTab === 'dashboard' ? 'section active' : 'section'}>
-                <KpiRow snapshot={snapshot} />
-                <DashboardView snapshot={snapshot} />
-            </div>
-
-            <div className={currentTab === 'positions' ? 'section active' : 'section'}>
-                <PositionsView
-                    positions={snapshot.positions}
-                    onPriceChange={handlePriceChange}
+            {/* Corps de l'application */}
+            <main className="main-content">
+                {/* Navigation par Onglets */}
+                <Tabs
+                    currentTab={currentTab}
+                    onChange={setCurrentTab}
+                    positionsCount={snapshot.positions.length}
+                    transactionsCount={transactions.length}
                 />
-            </div>
 
-            <div className={currentTab === 'transaction' ? 'section active' : 'section'}>
-                <TransactionView
-                    onSaveTransaction={handleSaveTransaction}
-                    editingTransaction={editingTransaction}
-                    onCancelEdit={handleCancelEdit}
-                    currentPrice={editingTransaction ? prices[editingTransaction.ticker] || '' : ''}
-                />
-            </div>
+                {loading ? (
+                    <div className="card loading-card">
+                        <RefreshCw size={24} className="spin-icon text-accent" />
+                        <p>Chargement de votre portefeuille...</p>
+                    </div>
+                ) : (
+                    <>
+                        {/* Vue 1 : Tableau de bord */}
+                        <div className={currentTab === 'dashboard' ? 'tab-view active' : 'tab-view'}>
+                            <KpiRow snapshot={snapshot} />
+                            <DashboardView snapshot={snapshot} />
+                        </div>
 
-            <div className={currentTab === 'history' ? 'section active' : 'section'}>
-                <HistoryView
-                    transactions={transactions}
-                    onDelete={handleDeleteTransaction}
-                    onEdit={handleEditTransaction}
-                />
-            </div>
+                        {/* Vue 2 : Positions */}
+                        <div className={currentTab === 'positions' ? 'tab-view active' : 'tab-view'}>
+                            <PositionsView
+                                positions={snapshot.positions}
+                                onPriceChange={handlePriceChange}
+                                onRefreshLivePrices={handleManualRefresh}
+                                isRefreshing={isRefreshing}
+                                lastRefreshTime={lastRefreshTime}
+                                onQuickAction={handleQuickAction}
+                            />
+                        </div>
+
+                        {/* Vue 3 : Nouvelle transaction / Modification */}
+                        <div className={currentTab === 'transaction' ? 'tab-view active' : 'tab-view'}>
+                            <TransactionView
+                                onSaveTransaction={handleSaveTransaction}
+                                editingTransaction={editingTransaction}
+                                onCancelEdit={handleCancelEdit}
+                                prefillData={prefillData}
+                                transactions={transactions}
+                                currentPrice={
+                                    editingTransaction
+                                        ? prices[editingTransaction.ticker] || ''
+                                        : prefillData?.currentPrice || ''
+                                }
+                            />
+                        </div>
+
+                        {/* Vue 4 : Historique */}
+                        <div className={currentTab === 'history' ? 'tab-view active' : 'tab-view'}>
+                            <HistoryView
+                                transactions={transactions}
+                                onDelete={handleDeleteTransaction}
+                                onEdit={handleEditTransaction}
+                            />
+                        </div>
+                    </>
+                )}
+            </main>
         </div>
     )
 }
