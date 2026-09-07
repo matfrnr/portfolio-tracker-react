@@ -52,3 +52,15 @@ export async function deleteTransaction(id) {
 
   return handleResponse(response);
 }
+
+export async function bulkImportTransactions(transactions, prices = {}) {
+  const response = await fetch(`${API_BASE}/bulk`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ transactions, prices }),
+  });
+
+  return handleResponse(response);
+}

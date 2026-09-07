@@ -23,6 +23,7 @@ export default function PositionsView({
     isRefreshing,
     lastRefreshTime,
     onQuickAction,
+    forexRate = 1.085,
 }) {
     const [searchQuery, setSearchQuery] = useState('')
     const [sortField, setSortField] = useState('marketValue')
@@ -78,7 +79,8 @@ export default function PositionsView({
 
     function handlePriceBlur(ticker, initialPrice) {
         if (ticker in localPrices) {
-            const parsed = parseFloat(localPrices[ticker])
+            const raw = String(localPrices[ticker]).trim().replace(/\s+/g, '').replace(',', '.')
+            const parsed = parseFloat(raw)
             if (!isNaN(parsed) && parsed >= 0 && parsed !== initialPrice) {
                 onPriceChange(ticker, parsed)
             }
@@ -139,7 +141,12 @@ export default function PositionsView({
                 {lastRefreshTime && (
                     <div className="last-sync-badge">
                         <Sparkles size={12} />
-                        Cours mis à jour : {lastRefreshTime}
+                        Cours : {lastRefreshTime}
+                    </div>
+                )}
+                {forexRate && (
+                    <div className="last-sync-badge" title="Taux de change réel EUR/USD">
+                        💱 1 € = {Number(forexRate).toFixed(4)} $
                     </div>
                 )}
             </div>
@@ -182,12 +189,12 @@ export default function PositionsView({
                                 </th>
                                 <th onClick={() => handleSort('averageCost')} className="sortable-th text-right">
                                     <div className="th-content justify-end">
-                                        PRU <ArrowUpDown size={12} />
+                                        PRU d'achat <ArrowUpDown size={12} />
                                     </div>
                                 </th>
                                 <th onClick={() => handleSort('costBasis')} className="sortable-th text-right">
                                     <div className="th-content justify-end">
-                                        Investi <ArrowUpDown size={12} />
+                                        Investi (€) <ArrowUpDown size={12} />
                                     </div>
                                 </th>
                                 <th onClick={() => handleSort('currentPrice')} className="sortable-th text-right">
@@ -197,12 +204,12 @@ export default function PositionsView({
                                 </th>
                                 <th onClick={() => handleSort('marketValue')} className="sortable-th text-right">
                                     <div className="th-content justify-end">
-                                        Valeur totale <ArrowUpDown size={12} />
+                                        Valeur (€) <ArrowUpDown size={12} />
                                     </div>
                                 </th>
                                 <th onClick={() => handleSort('unrealizedPnL')} className="sortable-th text-right">
                                     <div className="th-content justify-end">
-                                        Gain / Perte <ArrowUpDown size={12} />
+                                        Gain / Perte (€) <ArrowUpDown size={12} />
                                     </div>
                                 </th>
                                 <th onClick={() => handleSort('allocationWeight')} className="sortable-th text-right">
@@ -227,7 +234,14 @@ export default function PositionsView({
                                     <tr key={pos.ticker} className="table-row">
                                         <td>
                                             <div className="ticker-badge-box">
-                                                <span className="ticker-sym">{pos.ticker}</span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                    <span className="ticker-sym">{pos.ticker}</span>
+                                                    {pos.currency === 'USD' && (
+                                                        <span className="badge badge-buy" style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}>
+                                                            USD
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <span className="ticker-name" title={pos.name}>
                                                     {pos.name || pos.ticker}
                                                 </span>
@@ -237,10 +251,10 @@ export default function PositionsView({
                                             {formatQty(pos.quantity)}
                                         </td>
                                         <td className="text-right font-mono">
-                                            {formatCurrency(pos.averageCost)}
+                                            {formatCurrency(pos.averageCost, pos.currency)}
                                         </td>
                                         <td className="text-right font-mono text-secondary">
-                                            {formatCurrency(pos.costBasis)}
+                                            {formatCurrency(pos.costBasis, 'EUR')}
                                         </td>
                                         <td className="text-right">
                                             <div className="price-input-wrapper">
@@ -258,16 +272,16 @@ export default function PositionsView({
                                                         handlePriceKeyDown(e, pos.ticker, pos.currentPrice)
                                                     }
                                                     placeholder="0.00"
-                                                    title="Modifiez le cours et appuyez sur Entrée ou cliquez ailleurs"
+                                                    title={`Modifiez le cours en ${pos.currency === 'USD' ? 'Dollars ($)' : 'Euros (€)'}`}
                                                 />
                                             </div>
                                         </td>
                                         <td className="text-right font-mono font-bold">
-                                            {formatCurrency(pos.marketValue)}
+                                            {formatCurrency(pos.marketValue, 'EUR')}
                                         </td>
                                         <td className="text-right">
                                             <div className={`pnl-badge ${isPos ? 'pos' : 'neg'}`}>
-                                                {formatCurrency(pos.unrealizedPnL)}
+                                                {formatCurrency(pos.unrealizedPnL, 'EUR')}
                                             </div>
                                             <div className={`pnl-sub ${isPos ? 'pos' : 'neg'}`}>
                                                 {formatPercent(pos.unrealizedPct, true)}

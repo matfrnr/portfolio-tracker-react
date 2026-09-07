@@ -4,6 +4,8 @@ import {
     formatQty,
     toISODateString,
     getAvailableQuantity,
+    parseNumber,
+    getTodayISODate,
 } from '../lib/portfolio'
 import { searchTickers, fetchLiveQuotes } from '../api/prices'
 import {
@@ -17,13 +19,16 @@ import {
     CheckCircle2,
     AlertCircle,
     X,
+    DollarSign,
+    Euro,
 } from 'lucide-react'
 
 const emptyForm = {
     type: 'BUY',
     ticker: '',
     name: '',
-    date: new Date().toISOString().split('T')[0],
+    currency: 'EUR',
+    date: getTodayISODate(),
     quantity: '',
     unitPrice: '',
     currentPrice: '',
@@ -38,6 +43,7 @@ export default function TransactionView({
     currentPrice,
     transactions = [],
     prefillData = null,
+    forexRate = 1.085,
 }) {
     const [form, setForm] = useState(emptyForm)
     const [suggestions, setSuggestions] = useState([])
@@ -53,6 +59,7 @@ export default function TransactionView({
                 type: editingTransaction.type,
                 ticker: editingTransaction.ticker,
                 name: editingTransaction.name || '',
+                currency: editingTransaction.currency || (editingTransaction.ticker.endsWith('.PA') ? 'EUR' : 'USD'),
                 date: toISODateString(editingTransaction.date),
                 quantity: String(editingTransaction.quantity),
                 unitPrice: String(editingTransaction.unitPrice),
@@ -64,19 +71,21 @@ export default function TransactionView({
                 note: editingTransaction.note || '',
             })
         } else if (prefillData) {
+            const detectedCurr = prefillData.currency || (prefillData.ticker?.endsWith('.PA') ? 'EUR' : 'USD')
             setForm({
                 ...emptyForm,
                 type: prefillData.type || 'BUY',
                 ticker: prefillData.ticker || '',
                 name: prefillData.name || '',
+                currency: detectedCurr,
                 unitPrice: prefillData.currentPrice ? String(prefillData.currentPrice) : '',
                 currentPrice: prefillData.currentPrice ? String(prefillData.currentPrice) : '',
-                date: new Date().toISOString().split('T')[0],
+                date: getTodayISODate(),
             })
         } else {
             setForm({
                 ...emptyForm,
-                date: new Date().toISOString().split('T')[0],
+                date: getTodayISODate(),
             })
         }
     }, [editingTransaction, currentPrice, prefillData])
@@ -104,9 +113,9 @@ export default function TransactionView({
 
     // Calculs de total
     const { gross, total } = useMemo(() => {
-        const quantity = Number(form.quantity || 0)
-        const unitPrice = Number(form.unitPrice || 0)
-        const fees = Number(form.fees || 0)
+        const quantity = parseNumber(form.quantity, 0)
+        const unitPrice = parseNumber(form.unitPrice, 0)
+        const fees = parseNumber(form.fees, 0)
         const grossAmount = quantity * unitPrice
         const netAmount = form.type === 'SELL' ? grossAmount - fees : grossAmount + fees
 
@@ -149,10 +158,13 @@ export default function TransactionView({
     async function handleSelectSuggestion(suggestion) {
         const symbol = suggestion.symbol.toUpperCase()
         setShowSuggestions(false)
+        const detectedCurr = suggestion.currency || (symbol.endsWith('.PA') || symbol.endsWith('.MC') ? 'EUR' : 'USD')
+
         setForm((prev) => ({
             ...prev,
             ticker: symbol,
             name: suggestion.name || symbol,
+            currency: detectedCurr,
         }))
 
         // Récupérer le cours en direct
@@ -160,8 +172,10 @@ export default function TransactionView({
             const quotes = await fetchLiveQuotes([symbol])
             if (quotes[symbol]?.price) {
                 const livePrice = quotes[symbol].price
+                const quoteCurr = quotes[symbol].currency || detectedCurr
                 setForm((prev) => ({
                     ...prev,
+                    currency: quoteCurr,
                     unitPrice: prev.unitPrice ? prev.unitPrice : String(livePrice),
                     currentPrice: String(livePrice),
                 }))
@@ -174,18 +188,26 @@ export default function TransactionView({
     function handleSubmit(event) {
         event.preventDefault()
 
+        const cleanQty = parseNumber(form.quantity, 0)
+        const cleanUnitPrice = parseNumber(form.unitPrice, 0)
+        const cleanFees = parseNumber(form.fees, 0)
+        const hasCurrentPrice = form.currentPrice !== '' && form.currentPrice !== null && form.currentPrice !== undefined
+        const cleanCurrentPrice = hasCurrentPrice ? parseNumber(form.currentPrice, null) : null
+        const selectedCurrency = form.currency === 'USD' ? 'USD' : 'EUR'
+        const cleanExchangeRate = selectedCurrency === 'USD' ? (forexRate || 1.085) : 1.0
+
         onSaveTransaction({
             ...form,
+            type: form.type,
             ticker: form.ticker.trim().toUpperCase(),
             name: form.name.trim() || form.ticker.trim().toUpperCase(),
             date: form.date,
-            quantity: Number(form.quantity),
-            unitPrice: Number(form.unitPrice),
-            currentPrice:
-                form.currentPrice === '' || isNaN(Number(form.currentPrice))
-                    ? null
-                    : Number(form.currentPrice),
-            fees: Number(form.fees || 0),
+            currency: selectedCurrency,
+            exchangeRate: cleanExchangeRate,
+            quantity: cleanQty,
+            unitPrice: cleanUnitPrice,
+            currentPrice: cleanCurrentPrice,
+            fees: cleanFees,
         })
     }
 
@@ -195,10 +217,12 @@ export default function TransactionView({
         }
         setForm({
             ...emptyForm,
-            date: new Date().toISOString().split('T')[0],
+            date: getTodayISODate(),
         })
         setShowSuggestions(false)
     }
+
+    const currencySymbol = form.currency === 'USD' ? '$' : '€'
 
     return (
         <div className="card form-card">
@@ -210,27 +234,52 @@ export default function TransactionView({
                     <p className="card-subtitle">
                         {editingTransaction
                             ? 'Mettez à jour les détails de cette opération.'
-                            : "Enregistrez un achat ou une vente d'action, ETF ou crypto."}
+                            : "Enregistrez un ordre d'achat ou de vente en Euros ou en Dollars."}
                     </p>
                 </div>
 
-                <div className="type-toggle">
-                    <button
-                        type="button"
-                        className={form.type === 'BUY' ? 'type-btn active buy' : 'type-btn'}
-                        onClick={() => updateField('type', 'BUY')}
-                    >
-                        <TrendingUp size={16} />
-                        Achat
-                    </button>
-                    <button
-                        type="button"
-                        className={form.type === 'SELL' ? 'type-btn active sell' : 'type-btn'}
-                        onClick={() => updateField('type', 'SELL')}
-                    >
-                        <TrendingDown size={16} />
-                        Vente
-                    </button>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {/* Sélecteur de Type Achat / Vente */}
+                    <div className="type-toggle">
+                        <button
+                            type="button"
+                            className={form.type === 'BUY' ? 'type-btn active buy' : 'type-btn'}
+                            onClick={() => updateField('type', 'BUY')}
+                        >
+                            <TrendingUp size={16} />
+                            Achat
+                        </button>
+                        <button
+                            type="button"
+                            className={form.type === 'SELL' ? 'type-btn active sell' : 'type-btn'}
+                            onClick={() => updateField('type', 'SELL')}
+                        >
+                            <TrendingDown size={16} />
+                            Vente
+                        </button>
+                    </div>
+
+                    {/* Sélecteur de Devise EUR / USD */}
+                    <div className="type-toggle">
+                        <button
+                            type="button"
+                            className={form.currency === 'EUR' ? 'type-btn active' : 'type-btn'}
+                            onClick={() => updateField('currency', 'EUR')}
+                            title="Transaction libellée en Euros (€)"
+                        >
+                            <Euro size={15} />
+                            EUR (€)
+                        </button>
+                        <button
+                            type="button"
+                            className={form.currency === 'USD' ? 'type-btn active' : 'type-btn'}
+                            onClick={() => updateField('currency', 'USD')}
+                            title="Transaction libellée en Dollars américains ($)"
+                        >
+                            <DollarSign size={15} />
+                            USD ($)
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -257,7 +306,7 @@ export default function TransactionView({
                                 value={form.ticker}
                                 onChange={(e) => updateField('ticker', e.target.value)}
                                 onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                                placeholder="ex. AAPL, MC.PA, CW8.PA, MSFT..."
+                                placeholder="ex. AAPL, MC.PA, CW8.PA, MSFT, NVDA..."
                                 required
                                 autoComplete="off"
                             />
@@ -276,7 +325,9 @@ export default function TransactionView({
                                             <span className="suggestion-symbol">{item.symbol}</span>
                                             <span className="suggestion-name">{item.name}</span>
                                         </div>
-                                        <span className="suggestion-exchange">{item.exchange}</span>
+                                        <span className="suggestion-exchange">
+                                            {item.currency ? `[${item.currency}] ` : ''}{item.exchange}
+                                        </span>
                                     </div>
                                 ))}
                             </div>
@@ -328,7 +379,9 @@ export default function TransactionView({
                     {/* Prix unitaire */}
                     <div className="form-field">
                         <label>
-                            {form.type === 'BUY' ? "Prix d'achat unitaire (€)" : 'Prix de vente unitaire (€)'}{' '}
+                            {form.type === 'BUY'
+                                ? `Prix d'achat unitaire (${currencySymbol})`
+                                : `Prix de vente unitaire (${currencySymbol})`}{' '}
                             <span className="required">*</span>
                         </label>
                         <input
@@ -337,30 +390,30 @@ export default function TransactionView({
                             step="any"
                             value={form.unitPrice}
                             onChange={(e) => updateField('unitPrice', e.target.value)}
-                            placeholder="ex. 185.50"
+                            placeholder={`ex. ${form.currency === 'USD' ? '225.50' : '185.50'}`}
                             required
                         />
                     </div>
 
                     {/* Cours actuel */}
                     <div className="form-field">
-                        <label>Cours actuel du marché (€)</label>
+                        <label>Cours actuel du marché ({currencySymbol})</label>
                         <input
                             type="number"
                             min="0"
                             step="any"
                             value={form.currentPrice}
                             onChange={(e) => updateField('currentPrice', e.target.value)}
-                            placeholder="ex. 192.00 (optionnel)"
+                            placeholder={`ex. ${form.currency === 'USD' ? '230.00' : '190.00'} (optionnel)`}
                         />
                         <span className="hint">
-                            Permet d'évaluer la plus-value latente immédiatement.
+                            Évalue la plus-value latente immédiatement.
                         </span>
                     </div>
 
                     {/* Frais */}
                     <div className="form-field">
-                        <label>Frais de courtage / transaction (€)</label>
+                        <label>Frais de courtage ({currencySymbol})</label>
                         <input
                             type="number"
                             min="0"
@@ -377,7 +430,7 @@ export default function TransactionView({
                         <input
                             value={form.note}
                             onChange={(e) => updateField('note', e.target.value)}
-                            placeholder="ex. DCA mensuel, rééquilibrage, dividende réinvesti..."
+                            placeholder="ex. Achat NASDAQ, dividende réinvesti, DCA mensuel..."
                         />
                     </div>
                 </div>
@@ -386,19 +439,28 @@ export default function TransactionView({
                 <div className="total-preview-box">
                     <div className="total-preview-item">
                         <span className="preview-label">Montant brut :</span>
-                        <span className="preview-val">{formatCurrency(gross)}</span>
+                        <span className="preview-val">{formatCurrency(gross, form.currency)}</span>
                     </div>
                     <div className="total-preview-item">
                         <span className="preview-label">Frais :</span>
-                        <span className="preview-val">{formatCurrency(Number(form.fees || 0))}</span>
+                        <span className="preview-val">{formatCurrency(parseNumber(form.fees, 0), form.currency)}</span>
                     </div>
                     <div className="total-preview-divider" />
                     <div className="total-preview-item highlight">
                         <span className="preview-label">
                             {form.type === 'SELL' ? 'Montant net crédité :' : 'Total net investi :'}
                         </span>
-                        <span className="preview-val total-amount">{formatCurrency(total)}</span>
+                        <span className="preview-val total-amount">{formatCurrency(total, form.currency)}</span>
                     </div>
+                    {form.currency === 'USD' && (
+                        <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                            Conversion portefeuille : ≈{' '}
+                            <strong style={{ color: 'var(--text-primary)' }}>
+                                {formatCurrency(total / (forexRate || 1.085), 'EUR')}
+                            </strong>{' '}
+                            (taux EUR/USD : {Number(forexRate || 1.085).toFixed(4)})
+                        </div>
+                    )}
                 </div>
 
                 <div className="btn-row">

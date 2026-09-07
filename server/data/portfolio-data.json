@@ -1,0 +1,19 @@
+{
+  "transactions": [],
+  "prices": {
+    "AAPL": 319.97,
+    "MSFT": 497.011,
+    "NVDA": 135.5
+  },
+  "currencies": {
+    "AAPL": "USD",
+    "MSFT": "EUR",
+    "NVDA": "EUR"
+  },
+  "forex": {
+    "EURUSD": 1.1625,
+    "USDEUR": 0.8602150537634408,
+    "updatedAt": "2026-09-07T20:28:59.601Z"
+  },
+  "lastUpdated": "2026-09-07T20:28:59.743Z"
+}

@@ -65,8 +65,7 @@ export default function KpiRow({ snapshot }) {
                 </div>
                 <div className="kpi-bottom">
                     <span className={`delta-badge ${isUnrealizedPos ? 'pos' : 'neg'}`}>
-                        {isUnrealizedPos ? '+' : ''}
-                        {formatPercent(unrealizedPct)}
+                        {formatPercent(unrealizedPct, true)}
                     </span>
                     <span className="kpi-subtext">Non matérialisée</span>
                 </div>

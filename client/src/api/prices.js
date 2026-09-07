@@ -18,14 +18,19 @@ export async function getPrices() {
     return handleResponse(response)
 }
 
-export async function updatePrice(ticker, price) {
+export async function updatePrice(ticker, price, currency) {
     const response = await fetch(API_BASE, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ticker, price }),
+        body: JSON.stringify({ ticker, price, currency }),
     })
+    return handleResponse(response)
+}
+
+export async function getForexRate() {
+    const response = await fetch('/api/forex')
     return handleResponse(response)
 }
 
