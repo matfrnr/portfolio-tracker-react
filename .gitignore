@@ -82,6 +82,11 @@ storage/
 public/uploads/
 
 # =========================
+# Personal portfolio data (données privées, ne jamais committer)
+# =========================
+server/data/portfolio-data.json
+
+# =========================
 # Optional generated files
 # =========================
 *.pid
