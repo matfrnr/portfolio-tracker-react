@@ -37,18 +37,21 @@ export type AssetPriceSumAggregateOutputType = {
 export type AssetPriceMinAggregateOutputType = {
   ticker: string | null
   currentPrice: number | null
+  currency: string | null
   updatedAt: Date | null
 }
 
 export type AssetPriceMaxAggregateOutputType = {
   ticker: string | null
   currentPrice: number | null
+  currency: string | null
   updatedAt: Date | null
 }
 
 export type AssetPriceCountAggregateOutputType = {
   ticker: number
   currentPrice: number
+  currency: number
   updatedAt: number
   _all: number
 }
@@ -65,18 +68,21 @@ export type AssetPriceSumAggregateInputType = {
 export type AssetPriceMinAggregateInputType = {
   ticker?: true
   currentPrice?: true
+  currency?: true
   updatedAt?: true
 }
 
 export type AssetPriceMaxAggregateInputType = {
   ticker?: true
   currentPrice?: true
+  currency?: true
   updatedAt?: true
 }
 
 export type AssetPriceCountAggregateInputType = {
   ticker?: true
   currentPrice?: true
+  currency?: true
   updatedAt?: true
   _all?: true
 }
@@ -170,6 +176,7 @@ export type AssetPriceGroupByArgs<ExtArgs extends runtime.Types.Extensions.Inter
 export type AssetPriceGroupByOutputType = {
   ticker: string
   currentPrice: number
+  currency: string
   updatedAt: Date
   _count: AssetPriceCountAggregateOutputType | null
   _avg: AssetPriceAvgAggregateOutputType | null
@@ -199,12 +206,14 @@ export type AssetPriceWhereInput = {
   NOT?: Prisma.AssetPriceWhereInput | Prisma.AssetPriceWhereInput[]
   ticker?: Prisma.StringFilter<"AssetPrice"> | string
   currentPrice?: Prisma.FloatFilter<"AssetPrice"> | number
+  currency?: Prisma.StringFilter<"AssetPrice"> | string
   updatedAt?: Prisma.DateTimeFilter<"AssetPrice"> | Date | string
 }
 
 export type AssetPriceOrderByWithRelationInput = {
   ticker?: Prisma.SortOrder
   currentPrice?: Prisma.SortOrder
+  currency?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
 
@@ -214,12 +223,14 @@ export type AssetPriceWhereUniqueInput = Prisma.AtLeast<{
   OR?: Prisma.AssetPriceWhereInput[]
   NOT?: Prisma.AssetPriceWhereInput | Prisma.AssetPriceWhereInput[]
   currentPrice?: Prisma.FloatFilter<"AssetPrice"> | number
+  currency?: Prisma.StringFilter<"AssetPrice"> | string
   updatedAt?: Prisma.DateTimeFilter<"AssetPrice"> | Date | string
 }, "ticker">
 
 export type AssetPriceOrderByWithAggregationInput = {
   ticker?: Prisma.SortOrder
   currentPrice?: Prisma.SortOrder
+  currency?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.AssetPriceCountOrderByAggregateInput
   _avg?: Prisma.AssetPriceAvgOrderByAggregateInput
@@ -234,54 +245,63 @@ export type AssetPriceScalarWhereWithAggregatesInput = {
   NOT?: Prisma.AssetPriceScalarWhereWithAggregatesInput | Prisma.AssetPriceScalarWhereWithAggregatesInput[]
   ticker?: Prisma.StringWithAggregatesFilter<"AssetPrice"> | string
   currentPrice?: Prisma.FloatWithAggregatesFilter<"AssetPrice"> | number
+  currency?: Prisma.StringWithAggregatesFilter<"AssetPrice"> | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"AssetPrice"> | Date | string
 }
 
 export type AssetPriceCreateInput = {
   ticker: string
   currentPrice: number
+  currency?: string
   updatedAt?: Date | string
 }
 
 export type AssetPriceUncheckedCreateInput = {
   ticker: string
   currentPrice: number
+  currency?: string
   updatedAt?: Date | string
 }
 
 export type AssetPriceUpdateInput = {
   ticker?: Prisma.StringFieldUpdateOperationsInput | string
   currentPrice?: Prisma.FloatFieldUpdateOperationsInput | number
+  currency?: Prisma.StringFieldUpdateOperationsInput | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type AssetPriceUncheckedUpdateInput = {
   ticker?: Prisma.StringFieldUpdateOperationsInput | string
   currentPrice?: Prisma.FloatFieldUpdateOperationsInput | number
+  currency?: Prisma.StringFieldUpdateOperationsInput | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type AssetPriceCreateManyInput = {
   ticker: string
   currentPrice: number
+  currency?: string
   updatedAt?: Date | string
 }
 
 export type AssetPriceUpdateManyMutationInput = {
   ticker?: Prisma.StringFieldUpdateOperationsInput | string
   currentPrice?: Prisma.FloatFieldUpdateOperationsInput | number
+  currency?: Prisma.StringFieldUpdateOperationsInput | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type AssetPriceUncheckedUpdateManyInput = {
   ticker?: Prisma.StringFieldUpdateOperationsInput | string
   currentPrice?: Prisma.FloatFieldUpdateOperationsInput | number
+  currency?: Prisma.StringFieldUpdateOperationsInput | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type AssetPriceCountOrderByAggregateInput = {
   ticker?: Prisma.SortOrder
   currentPrice?: Prisma.SortOrder
+  currency?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
 
@@ -292,12 +312,14 @@ export type AssetPriceAvgOrderByAggregateInput = {
 export type AssetPriceMaxOrderByAggregateInput = {
   ticker?: Prisma.SortOrder
   currentPrice?: Prisma.SortOrder
+  currency?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
 
 export type AssetPriceMinOrderByAggregateInput = {
   ticker?: Prisma.SortOrder
   currentPrice?: Prisma.SortOrder
+  currency?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
 
@@ -310,28 +332,32 @@ export type AssetPriceSumOrderByAggregateInput = {
 export type AssetPriceSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   ticker?: boolean
   currentPrice?: boolean
+  currency?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["assetPrice"]>
 
 export type AssetPriceSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   ticker?: boolean
   currentPrice?: boolean
+  currency?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["assetPrice"]>
 
 export type AssetPriceSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   ticker?: boolean
   currentPrice?: boolean
+  currency?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["assetPrice"]>
 
 export type AssetPriceSelectScalar = {
   ticker?: boolean
   currentPrice?: boolean
+  currency?: boolean
   updatedAt?: boolean
 }
 
-export type AssetPriceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"ticker" | "currentPrice" | "updatedAt", ExtArgs["result"]["assetPrice"]>
+export type AssetPriceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"ticker" | "currentPrice" | "currency" | "updatedAt", ExtArgs["result"]["assetPrice"]>
 
 export type $AssetPricePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "AssetPrice"
@@ -339,6 +365,7 @@ export type $AssetPricePayload<ExtArgs extends runtime.Types.Extensions.Internal
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     ticker: string
     currentPrice: number
+    currency: string
     updatedAt: Date
   }, ExtArgs["result"]["assetPrice"]>
   composites: {}
@@ -765,6 +792,7 @@ export interface Prisma__AssetPriceClient<T, Null = never, ExtArgs extends runti
 export interface AssetPriceFieldRefs {
   readonly ticker: Prisma.FieldRef<"AssetPrice", 'String'>
   readonly currentPrice: Prisma.FieldRef<"AssetPrice", 'Float'>
+  readonly currency: Prisma.FieldRef<"AssetPrice", 'String'>
   readonly updatedAt: Prisma.FieldRef<"AssetPrice", 'DateTime'>
 }
     

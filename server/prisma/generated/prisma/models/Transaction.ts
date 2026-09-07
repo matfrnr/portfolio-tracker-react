@@ -30,12 +30,14 @@ export type TransactionAvgAggregateOutputType = {
   quantity: number | null
   unitPrice: number | null
   fees: number | null
+  exchangeRate: number | null
 }
 
 export type TransactionSumAggregateOutputType = {
   quantity: number | null
   unitPrice: number | null
   fees: number | null
+  exchangeRate: number | null
 }
 
 export type TransactionMinAggregateOutputType = {
@@ -48,6 +50,8 @@ export type TransactionMinAggregateOutputType = {
   unitPrice: number | null
   fees: number | null
   note: string | null
+  currency: string | null
+  exchangeRate: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -62,6 +66,8 @@ export type TransactionMaxAggregateOutputType = {
   unitPrice: number | null
   fees: number | null
   note: string | null
+  currency: string | null
+  exchangeRate: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -76,6 +82,8 @@ export type TransactionCountAggregateOutputType = {
   unitPrice: number
   fees: number
   note: number
+  currency: number
+  exchangeRate: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -86,12 +94,14 @@ export type TransactionAvgAggregateInputType = {
   quantity?: true
   unitPrice?: true
   fees?: true
+  exchangeRate?: true
 }
 
 export type TransactionSumAggregateInputType = {
   quantity?: true
   unitPrice?: true
   fees?: true
+  exchangeRate?: true
 }
 
 export type TransactionMinAggregateInputType = {
@@ -104,6 +114,8 @@ export type TransactionMinAggregateInputType = {
   unitPrice?: true
   fees?: true
   note?: true
+  currency?: true
+  exchangeRate?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -118,6 +130,8 @@ export type TransactionMaxAggregateInputType = {
   unitPrice?: true
   fees?: true
   note?: true
+  currency?: true
+  exchangeRate?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -132,6 +146,8 @@ export type TransactionCountAggregateInputType = {
   unitPrice?: true
   fees?: true
   note?: true
+  currency?: true
+  exchangeRate?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -233,6 +249,8 @@ export type TransactionGroupByOutputType = {
   unitPrice: number
   fees: number
   note: string | null
+  currency: string
+  exchangeRate: number | null
   createdAt: Date
   updatedAt: Date
   _count: TransactionCountAggregateOutputType | null
@@ -270,6 +288,8 @@ export type TransactionWhereInput = {
   unitPrice?: Prisma.FloatFilter<"Transaction"> | number
   fees?: Prisma.FloatFilter<"Transaction"> | number
   note?: Prisma.StringNullableFilter<"Transaction"> | string | null
+  currency?: Prisma.StringFilter<"Transaction"> | string
+  exchangeRate?: Prisma.FloatNullableFilter<"Transaction"> | number | null
   createdAt?: Prisma.DateTimeFilter<"Transaction"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Transaction"> | Date | string
 }
@@ -284,6 +304,8 @@ export type TransactionOrderByWithRelationInput = {
   unitPrice?: Prisma.SortOrder
   fees?: Prisma.SortOrder
   note?: Prisma.SortOrderInput | Prisma.SortOrder
+  currency?: Prisma.SortOrder
+  exchangeRate?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -301,6 +323,8 @@ export type TransactionWhereUniqueInput = Prisma.AtLeast<{
   unitPrice?: Prisma.FloatFilter<"Transaction"> | number
   fees?: Prisma.FloatFilter<"Transaction"> | number
   note?: Prisma.StringNullableFilter<"Transaction"> | string | null
+  currency?: Prisma.StringFilter<"Transaction"> | string
+  exchangeRate?: Prisma.FloatNullableFilter<"Transaction"> | number | null
   createdAt?: Prisma.DateTimeFilter<"Transaction"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Transaction"> | Date | string
 }, "id">
@@ -315,6 +339,8 @@ export type TransactionOrderByWithAggregationInput = {
   unitPrice?: Prisma.SortOrder
   fees?: Prisma.SortOrder
   note?: Prisma.SortOrderInput | Prisma.SortOrder
+  currency?: Prisma.SortOrder
+  exchangeRate?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.TransactionCountOrderByAggregateInput
@@ -337,6 +363,8 @@ export type TransactionScalarWhereWithAggregatesInput = {
   unitPrice?: Prisma.FloatWithAggregatesFilter<"Transaction"> | number
   fees?: Prisma.FloatWithAggregatesFilter<"Transaction"> | number
   note?: Prisma.StringNullableWithAggregatesFilter<"Transaction"> | string | null
+  currency?: Prisma.StringWithAggregatesFilter<"Transaction"> | string
+  exchangeRate?: Prisma.FloatNullableWithAggregatesFilter<"Transaction"> | number | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Transaction"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Transaction"> | Date | string
 }
@@ -351,6 +379,8 @@ export type TransactionCreateInput = {
   unitPrice: number
   fees?: number
   note?: string | null
+  currency?: string
+  exchangeRate?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -365,6 +395,8 @@ export type TransactionUncheckedCreateInput = {
   unitPrice: number
   fees?: number
   note?: string | null
+  currency?: string
+  exchangeRate?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -379,6 +411,8 @@ export type TransactionUpdateInput = {
   unitPrice?: Prisma.FloatFieldUpdateOperationsInput | number
   fees?: Prisma.FloatFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currency?: Prisma.StringFieldUpdateOperationsInput | string
+  exchangeRate?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -393,6 +427,8 @@ export type TransactionUncheckedUpdateInput = {
   unitPrice?: Prisma.FloatFieldUpdateOperationsInput | number
   fees?: Prisma.FloatFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currency?: Prisma.StringFieldUpdateOperationsInput | string
+  exchangeRate?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -407,6 +443,8 @@ export type TransactionCreateManyInput = {
   unitPrice: number
   fees?: number
   note?: string | null
+  currency?: string
+  exchangeRate?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -421,6 +459,8 @@ export type TransactionUpdateManyMutationInput = {
   unitPrice?: Prisma.FloatFieldUpdateOperationsInput | number
   fees?: Prisma.FloatFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currency?: Prisma.StringFieldUpdateOperationsInput | string
+  exchangeRate?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -435,6 +475,8 @@ export type TransactionUncheckedUpdateManyInput = {
   unitPrice?: Prisma.FloatFieldUpdateOperationsInput | number
   fees?: Prisma.FloatFieldUpdateOperationsInput | number
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currency?: Prisma.StringFieldUpdateOperationsInput | string
+  exchangeRate?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -449,6 +491,8 @@ export type TransactionCountOrderByAggregateInput = {
   unitPrice?: Prisma.SortOrder
   fees?: Prisma.SortOrder
   note?: Prisma.SortOrder
+  currency?: Prisma.SortOrder
+  exchangeRate?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -457,6 +501,7 @@ export type TransactionAvgOrderByAggregateInput = {
   quantity?: Prisma.SortOrder
   unitPrice?: Prisma.SortOrder
   fees?: Prisma.SortOrder
+  exchangeRate?: Prisma.SortOrder
 }
 
 export type TransactionMaxOrderByAggregateInput = {
@@ -469,6 +514,8 @@ export type TransactionMaxOrderByAggregateInput = {
   unitPrice?: Prisma.SortOrder
   fees?: Prisma.SortOrder
   note?: Prisma.SortOrder
+  currency?: Prisma.SortOrder
+  exchangeRate?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -483,6 +530,8 @@ export type TransactionMinOrderByAggregateInput = {
   unitPrice?: Prisma.SortOrder
   fees?: Prisma.SortOrder
   note?: Prisma.SortOrder
+  currency?: Prisma.SortOrder
+  exchangeRate?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -491,6 +540,7 @@ export type TransactionSumOrderByAggregateInput = {
   quantity?: Prisma.SortOrder
   unitPrice?: Prisma.SortOrder
   fees?: Prisma.SortOrder
+  exchangeRate?: Prisma.SortOrder
 }
 
 export type StringFieldUpdateOperationsInput = {
@@ -513,6 +563,14 @@ export type NullableStringFieldUpdateOperationsInput = {
   set?: string | null
 }
 
+export type NullableFloatFieldUpdateOperationsInput = {
+  set?: number | null
+  increment?: number
+  decrement?: number
+  multiply?: number
+  divide?: number
+}
+
 
 
 export type TransactionSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -525,6 +583,8 @@ export type TransactionSelect<ExtArgs extends runtime.Types.Extensions.InternalA
   unitPrice?: boolean
   fees?: boolean
   note?: boolean
+  currency?: boolean
+  exchangeRate?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["transaction"]>
@@ -539,6 +599,8 @@ export type TransactionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.E
   unitPrice?: boolean
   fees?: boolean
   note?: boolean
+  currency?: boolean
+  exchangeRate?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["transaction"]>
@@ -553,6 +615,8 @@ export type TransactionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.E
   unitPrice?: boolean
   fees?: boolean
   note?: boolean
+  currency?: boolean
+  exchangeRate?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["transaction"]>
@@ -567,11 +631,13 @@ export type TransactionSelectScalar = {
   unitPrice?: boolean
   fees?: boolean
   note?: boolean
+  currency?: boolean
+  exchangeRate?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type TransactionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "type" | "ticker" | "name" | "date" | "quantity" | "unitPrice" | "fees" | "note" | "createdAt" | "updatedAt", ExtArgs["result"]["transaction"]>
+export type TransactionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "type" | "ticker" | "name" | "date" | "quantity" | "unitPrice" | "fees" | "note" | "currency" | "exchangeRate" | "createdAt" | "updatedAt", ExtArgs["result"]["transaction"]>
 
 export type $TransactionPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Transaction"
@@ -586,6 +652,8 @@ export type $TransactionPayload<ExtArgs extends runtime.Types.Extensions.Interna
     unitPrice: number
     fees: number
     note: string | null
+    currency: string
+    exchangeRate: number | null
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["transaction"]>
@@ -1020,6 +1088,8 @@ export interface TransactionFieldRefs {
   readonly unitPrice: Prisma.FieldRef<"Transaction", 'Float'>
   readonly fees: Prisma.FieldRef<"Transaction", 'Float'>
   readonly note: Prisma.FieldRef<"Transaction", 'String'>
+  readonly currency: Prisma.FieldRef<"Transaction", 'String'>
+  readonly exchangeRate: Prisma.FieldRef<"Transaction", 'Float'>
   readonly createdAt: Prisma.FieldRef<"Transaction", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Transaction", 'DateTime'>
 }

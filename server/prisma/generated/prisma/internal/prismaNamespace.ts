@@ -599,6 +599,8 @@ export const TransactionScalarFieldEnum = {
   unitPrice: 'unitPrice',
   fees: 'fees',
   note: 'note',
+  currency: 'currency',
+  exchangeRate: 'exchangeRate',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -609,6 +611,7 @@ export type TransactionScalarFieldEnum = (typeof TransactionScalarFieldEnum)[key
 export const AssetPriceScalarFieldEnum = {
   ticker: 'ticker',
   currentPrice: 'currentPrice',
+  currency: 'currency',
   updatedAt: 'updatedAt'
 } as const
 

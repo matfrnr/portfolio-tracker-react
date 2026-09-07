@@ -16,7 +16,7 @@ import {
     Layers,
 } from 'lucide-react'
 
-export default function HistoryView({ transactions = [], onDelete, onEdit }) {
+export default function HistoryView({ transactions = [], onDelete, onEdit, forexRate = 1.085 }) {
     const [historyTab, setHistoryTab] = useState('ALL') // 'ALL' | 'BUY' | 'SELL'
     const [searchQuery, setSearchQuery] = useState('')
     const [deleteCandidate, setDeleteCandidate] = useState(null)
@@ -37,7 +37,7 @@ export default function HistoryView({ transactions = [], onDelete, onEdit }) {
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     }, [transactions, historyTab, searchQuery])
 
-    // Totaux filtrés
+    // Totaux filtrés consolidés en EUR
     const stats = useMemo(() => {
         let totalBuy = 0
         let totalSell = 0
@@ -47,17 +47,21 @@ export default function HistoryView({ transactions = [], onDelete, onEdit }) {
             const qty = Number(tx.quantity || 0)
             const price = Number(tx.unitPrice || 0)
             const fees = Number(tx.fees || 0)
-            totalFees += fees
+            const currency = tx.currency || (tx.ticker?.endsWith('.PA') ? 'EUR' : 'USD')
+            const rate = currency === 'USD' ? (tx.exchangeRate || forexRate || 1.085) : 1.0
+
+            const feesEUR = fees / rate
+            totalFees += feesEUR
 
             if (tx.type === 'BUY') {
-                totalBuy += qty * price + fees
+                totalBuy += (qty * price + fees) / rate
             } else {
-                totalSell += qty * price - fees
+                totalSell += (qty * price - fees) / rate
             }
         }
 
         return { totalBuy, totalSell, totalFees }
-    }, [transactions])
+    }, [transactions, forexRate])
 
     function confirmDelete() {
         if (deleteCandidate) {
@@ -147,9 +151,14 @@ export default function HistoryView({ transactions = [], onDelete, onEdit }) {
                 <div className="history-list">
                     {filteredTransactions.map((tx) => {
                         const isBuy = tx.type === 'BUY'
-                        const gross = Number(tx.quantity || 0) * Number(tx.unitPrice || 0)
+                        const quantity = Number(tx.quantity || 0)
+                        const unitPrice = Number(tx.unitPrice || 0)
                         const fees = Number(tx.fees || 0)
+                        const gross = quantity * unitPrice
                         const netTotal = isBuy ? gross + fees : gross - fees
+                        const currency = tx.currency || (tx.ticker?.endsWith('.PA') ? 'EUR' : 'USD')
+                        const rate = currency === 'USD' ? (tx.exchangeRate || forexRate || 1.085) : 1.0
+                        const netTotalEUR = netTotal / rate
 
                         return (
                             <div key={tx.id} className="history-item">
@@ -167,6 +176,11 @@ export default function HistoryView({ transactions = [], onDelete, onEdit }) {
                                             <span className={`badge ${isBuy ? 'badge-buy' : 'badge-sell'}`}>
                                                 {isBuy ? 'Achat' : 'Vente'}
                                             </span>
+                                            {currency === 'USD' && (
+                                                <span className="badge badge-buy" style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}>
+                                                    USD
+                                                </span>
+                                            )}
                                         </div>
 
                                         <div className="history-meta-line">
@@ -176,13 +190,13 @@ export default function HistoryView({ transactions = [], onDelete, onEdit }) {
                                             </span>
                                             <span>·</span>
                                             <span>
-                                                {formatQty(tx.quantity)} part(s) à {formatCurrency(tx.unitPrice)}
+                                                {formatQty(tx.quantity)} part(s) à {formatCurrency(tx.unitPrice, currency)}
                                             </span>
                                             {fees > 0 && (
                                                 <>
                                                     <span>·</span>
                                                     <span className="text-muted">
-                                                        Frais : {formatCurrency(fees)}
+                                                        Frais : {formatCurrency(fees, currency)}
                                                     </span>
                                                 </>
                                             )}
@@ -199,10 +213,15 @@ export default function HistoryView({ transactions = [], onDelete, onEdit }) {
                                 <div className="history-right">
                                     <div className="history-amount-box">
                                         <div className={`history-total-amount ${isBuy ? 'text-primary' : 'text-success'}`}>
-                                            {isBuy ? '-' : '+'}{formatCurrency(netTotal)}
+                                            {isBuy ? '-' : '+'}{formatCurrency(netTotal, currency)}
                                         </div>
                                         <span className="history-amount-label">
                                             {isBuy ? 'Coût total net' : 'Produit net perçu'}
+                                            {currency === 'USD' && (
+                                                <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                                    (≈ {formatCurrency(netTotalEUR, 'EUR')})
+                                                </span>
+                                            )}
                                         </span>
                                     </div>
 

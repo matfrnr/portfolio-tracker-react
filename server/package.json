@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "tsx --watch index.js"
+    "dev": "tsx watch --exclude \"data/**\" --exclude \"dev.db*\" index.js"
   },
   "keywords": [],
   "author": "",
