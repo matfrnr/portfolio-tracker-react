@@ -3,6 +3,7 @@ import {
     formatCurrency,
     formatPercent,
     formatQty,
+    formatAssetName,
 } from '../lib/portfolio'
 import {
     Search,
@@ -230,7 +231,7 @@ export default function PositionsView({
                                         <td>
                                             <div className="ticker-badge-box">
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                    <span className="ticker-sym">{pos.name || pos.ticker}</span>
+                                                    <span className="ticker-sym">{formatAssetName(pos.name, pos.ticker)}</span>
                                                     {pos.currency !== 'EUR' && (
                                                         <span className="badge badge-buy" style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}>
                                                             {pos.currency}

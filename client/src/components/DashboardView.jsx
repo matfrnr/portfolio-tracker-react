@@ -10,7 +10,7 @@ import {
     CartesianGrid,
     ReferenceLine,
 } from 'recharts'
-import { formatCurrency, formatPercent, exchangeRateFor } from '../lib/portfolio'
+import { formatCurrency, formatPercent, formatAssetName, exchangeRateFor } from '../lib/portfolio'
 import { fetchDividends } from '../api/prices'
 import {
     PieChart as PieIcon,
@@ -62,7 +62,7 @@ function CustomBarTooltip({ active, payload }) {
         return (
             <div className="chart-tooltip">
                 <div className="tooltip-header">
-                    <span className="tooltip-ticker">{data.name || data.ticker}</span>
+                    <span className="tooltip-ticker">{formatAssetName(data.name, data.ticker)}</span>
                     <span className="tooltip-name">{data.ticker}</span>
                 </div>
                 <div className="tooltip-row">
@@ -110,14 +110,14 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
             const classification = ASSET_CLASSIFICATION[position.ticker] || {}
             const metadata = assetMetadata[position.ticker] || {}
             const label = allocationMode === 'asset'
-                ? (position.name || position.ticker)
+                ? formatAssetName(position.name, position.ticker)
                 : allocationMode === 'sector'
                     ? (metadata.sector || classification.sector || 'À classer')
                     : (metadata.country || classification.country || 'À classer')
             const existing = groups.get(label) || { label, marketValue: 0, tickers: [], companies: [], color: PALETTE[groups.size % PALETTE.length] }
             existing.marketValue += Number(position.marketValue) || 0
             existing.tickers.push(position.ticker)
-            existing.companies.push(position.name || position.ticker)
+            existing.companies.push(formatAssetName(position.name, position.ticker))
             groups.set(label, existing)
         }
         const total = [...groups.values()].reduce((sum, item) => sum + item.marketValue, 0)
@@ -131,7 +131,7 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
             .sort((a, b) => b.unrealizedPnL - a.unrealizedPnL)
             .map((p) => ({
                 ticker: p.ticker,
-                name: p.name,
+                name: formatAssetName(p.name, p.ticker),
                 unrealizedPnL: Number(p.unrealizedPnL.toFixed(2)),
                 unrealizedPct: p.unrealizedPct,
                 currentPrice: p.currentPrice,
@@ -186,7 +186,7 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
                     <div className="dividend-forecast-list">
                         {dividendForecast.map((item) => (
                             <div className="dividend-forecast-row" key={item.ticker}>
-                                <div className="dividend-forecast-label"><strong>{item.name || item.ticker}</strong><span>{item.ticker}</span></div>
+                                <div className="dividend-forecast-label"><strong>{formatAssetName(item.name, item.ticker)}</strong><span>{item.ticker}</span></div>
                                 <div className="dividend-forecast-bar"><span style={{ width: `${maxDividend && item.amountEUR > 0 ? Math.max(2, item.amountEUR / maxDividend * 100) : 0}%` }} /></div>
                                 <strong>{item.unavailable ? 'Indisponible' : <>{formatCurrency(item.amountEUR, 'EUR')} <small>{formatCurrency(item.dividendPerShare, item.currency)} / action</small></>}</strong>
                             </div>
@@ -371,7 +371,7 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
                         <div>
                             <span className="stat-label">Meilleure performance</span>
                             <div className="stat-val">
-                                {topPerformer ? (topPerformer.name || topPerformer.ticker) : '—'}
+                                {topPerformer ? formatAssetName(topPerformer.name, topPerformer.ticker) : '—'}
                             </div>
                             <span className="stat-desc text-success">
                                 {topPerformer ? `${topPerformer.ticker} · ${formatPercent(topPerformer.unrealizedPct, true)}` : 'Aucun titre'}
@@ -386,7 +386,7 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
                         <div>
                             <span className="stat-label">Moins bonne performance</span>
                             <div className="stat-val">
-                                {worstPerformer ? (worstPerformer.name || worstPerformer.ticker) : '—'}
+                                {worstPerformer ? formatAssetName(worstPerformer.name, worstPerformer.ticker) : '—'}
                             </div>
                             <span className="stat-desc text-danger">
                                 {worstPerformer ? `${worstPerformer.ticker} · ${formatPercent(worstPerformer.unrealizedPct, true)}` : 'Aucun titre'}

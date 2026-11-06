@@ -1,5 +1,37 @@
 const EPSILON = 1e-6
 
+const SHORT_ASSET_NAMES = {
+    '2FE.DU': 'Ferrari',
+    '3V64.DE': 'Visa',
+    '8JD.F': 'Valbiotis',
+    'ABEA.DE': 'Alphabet',
+    'AMZ.DE': 'Amazon',
+    'DG.PA': 'VINCI',
+    'FB2A.DE': 'Meta',
+    'L8IN.DU': 'Nasdaq 100',
+    LU3170240538: 'Private Equity',
+    'MSF.DE': 'Microsoft',
+    MSFT: 'Microsoft',
+    'NVD.DE': 'NVIDIA',
+    'TKE.F': 'Take-Two',
+    UBER: 'Uber',
+    'VIE.PA': 'Veolia',
+    'VU.PA': 'VusionGroup',
+}
+
+export function formatAssetName(name, ticker = '') {
+    const symbol = String(ticker || '').trim().toUpperCase()
+    if (SHORT_ASSET_NAMES[symbol]) return SHORT_ASSET_NAMES[symbol]
+
+    const original = String(name || '').trim()
+    if (!original || original.toUpperCase() === symbol) return original || symbol
+    return original
+        .replace(/,?\s+(incorporated|inc\.?|corporation|corp\.?|company|co\.?|limited|ltd\.?|plc|llc|llp|s\.?a\.?|s\.?a\.?s\.?|n\.?v\.?|a\.?g\.?|s\.?e\.?)\s*$/i, '')
+        .replace(/\.(com|net|org)$/i, '')
+        .replace(/[,.\s]+$/, '')
+        .trim()
+}
+
 export function formatCurrency(value, currency = 'EUR') {
     const num = Number(value)
     const curr = currency ? String(currency).toUpperCase() : 'EUR'

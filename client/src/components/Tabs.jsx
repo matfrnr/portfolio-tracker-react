@@ -5,12 +5,12 @@ import {
     History,
 } from 'lucide-react'
 
-export default function Tabs({ currentTab, onChange, positionsCount = 0, transactionsCount = 0 }) {
+export default function Tabs({ currentTab, onChange, positionsCount = 0 }) {
     const tabs = [
         { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
         { id: 'positions', label: 'Positions', icon: Briefcase, count: positionsCount },
         { id: 'transaction', label: 'Nouvelle transaction', icon: PlusCircle },
-        { id: 'history', label: 'Historique', icon: History, count: transactionsCount },
+        { id: 'history', label: 'Historique', icon: History },
     ]
 
     return (

@@ -85,6 +85,9 @@ public/uploads/
 # Personal portfolio data (données privées, ne jamais committer)
 # =========================
 server/data/portfolio-data.json
+trade-republic-import.csv
+portefeuille-*.json
+portfolio-export-*.json
 
 # =========================
 # Optional generated files

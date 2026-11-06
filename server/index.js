@@ -314,6 +314,18 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: "10mb" }));
 
+// Portfolio data is stored in Supabase with per-user RLS in production.
+// Keep the legacy local-only endpoints unavailable on a public deployment.
+app.use((req, res, next) => {
+  if (
+    process.env.NODE_ENV === "production" &&
+    /^\/api\/(transactions|prices)(\/|$)/.test(req.path)
+  ) {
+    return res.status(404).json({ error: "Cette route locale n'est pas disponible." });
+  }
+  next();
+});
+
 // Healthcheck
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, timestamp: new Date().toISOString() });
@@ -594,7 +606,7 @@ app.get("/api/quotes", async (req, res) => {
     }
   }
 
-  if (hasNewPrices) {
+  if (hasNewPrices && process.env.NODE_ENV !== "production") {
     await syncDbToPermanentFile();
   }
 
@@ -748,8 +760,10 @@ app.post("/api/transactions/bulk", async (req, res) => {
   }
 });
 
-// Initialiser le stockage permanent au démarrage
-await initPermanentStorage();
+// Initialiser le stockage SQLite/JSON uniquement pour le mode de développement local.
+if (process.env.NODE_ENV !== "production") {
+  await initPermanentStorage();
+}
 
 const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`API disponible sur http://localhost:${PORT}`);

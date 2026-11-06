@@ -5,6 +5,7 @@ import {
     formatDateFR,
     transactionRate,
     defaultCurrencyForTicker,
+    formatAssetName,
 } from '../lib/portfolio'
 import {
     Search,
@@ -188,7 +189,7 @@ export default function HistoryView({ transactions = [], onDelete, onEdit, forex
 
                                     <div className="history-details">
                                         <div className="history-title-line">
-                                            <span className="history-asset-name">{tx.name || tx.ticker}<small>{tx.ticker}</small></span>
+                                            <span className="history-asset-name">{formatAssetName(tx.name, tx.ticker)}<small>{tx.ticker}</small></span>
                                             <span className={`badge ${isBuy ? 'badge-buy' : isSell ? 'badge-sell' : 'badge-dividend'}`}>
                                                 {isBuy ? 'Achat' : isSell ? 'Vente' : 'Dividende'}
                                             </span>

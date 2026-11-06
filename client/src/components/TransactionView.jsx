@@ -9,6 +9,7 @@ import {
     defaultCurrencyForTicker,
     parseNumber,
     getTodayISODate,
+    formatAssetName,
 } from '../lib/portfolio'
 import { searchTickers, fetchLiveQuotes, getForexRate } from '../api/prices'
 import {
@@ -379,7 +380,7 @@ export default function TransactionView({
                 <div className="info-banner">
                     <AlertCircle size={16} />
                     <span>
-                        Quantité actuellement disponible pour <strong>{form.name || form.ticker}</strong> ({form.ticker.toUpperCase()}) :{' '}
+                        Quantité actuellement disponible pour <strong>{formatAssetName(form.name, form.ticker)}</strong> ({form.ticker.toUpperCase()}) :{' '}
                         <strong>{formatQty(availableQty)}</strong> part(s).
                     </span>
                 </div>
@@ -416,7 +417,7 @@ export default function TransactionView({
                                                 onClick={() => handleSelectSuggestion(item)}
                                             >
                                                 <div>
-                                                    <span className="suggestion-name">{item.name}</span>
+                                                    <span className="suggestion-name">{formatAssetName(item.name, item.symbol)}</span>
                                                     <span className="suggestion-symbol">{item.symbol}</span>
                                                 </div>
                                                 <span className="suggestion-exchange">
@@ -450,7 +451,7 @@ export default function TransactionView({
                             >
                                 <option value="">{transactionAssets.length ? 'Choisir un actif détenu…' : 'Aucune position détenue'}</option>
                                 {transactionAssets.map((asset) => (
-                                    <option key={asset.ticker} value={asset.ticker}>{asset.name} — {asset.ticker}</option>
+                                    <option key={asset.ticker} value={asset.ticker}>{formatAssetName(asset.name, asset.ticker)} — {asset.ticker}</option>
                                 ))}
                             </select>
                             {transactionAssets.length === 0 && <span className="hint">Ajoute d’abord un achat pour enregistrer une vente ou un dividende.</span>}

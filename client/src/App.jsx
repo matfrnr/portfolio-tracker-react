@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import Tabs from './components/Tabs'
 import KpiRow from './components/KpiRow'
 import DashboardView from './components/DashboardView'
@@ -8,6 +8,7 @@ import HistoryView from './components/HistoryView'
 import { computePortfolio, validateTransaction, validateTransactionHistory, uid, parseNumber, formatCurrency, formatDateFR, formatQty, defaultCurrencyForTicker } from './lib/portfolio'
 import { exportPortfolioJSON, importPortfolioJSON } from './lib/storage'
 import { parsePortfolioCSV, downloadPortfolioCSVTemplate } from './lib/portfolioCsv'
+import { getPortfolioSettings, savePortfolioSettings } from './api/settings'
 import {
     getTransactions,
     createTransaction,
@@ -15,7 +16,7 @@ import {
     deleteTransaction,
     bulkImportTransactions,
 } from './api/transactions'
-import { getPrices, updatePrice, fetchLiveQuotes, getForexRate } from './api/prices'
+import { getPrices, updatePrice, savePrices, fetchLiveQuotes, getForexRate } from './api/prices'
 import {
     Download,
     Upload,
@@ -26,6 +27,7 @@ import {
     WifiOff,
     Briefcase,
     FileSpreadsheet,
+    LogOut,
 } from 'lucide-react'
 
 const STORAGE_KEYS = {
@@ -59,13 +61,16 @@ const EMPTY_SNAPSHOT = {
     worstPerformer: null,
 }
 
-export default function App() {
+export default function App({ user = null, onSignOut }) {
+    const storageKey = (key) => user?.id ? `${STORAGE_KEYS[key]}:${user.id}` : STORAGE_KEYS[key]
     const [currentTab, setCurrentTab] = useState('dashboard')
+    const [settingsReady, setSettingsReady] = useState(!user)
+    const importFileInput = useRef(null)
 
     // Initialisation immédiate depuis le stockage local (cache de secours permanent)
     const [transactions, setTransactions] = useState(() => {
         try {
-            const raw = localStorage.getItem(STORAGE_KEYS.transactions)
+            const raw = localStorage.getItem(storageKey('transactions'))
             return raw ? JSON.parse(raw) : []
         } catch {
             return []
@@ -74,7 +79,7 @@ export default function App() {
 
     const [prices, setPrices] = useState(() => {
         try {
-            const raw = localStorage.getItem(STORAGE_KEYS.prices)
+            const raw = localStorage.getItem(storageKey('prices'))
             return raw ? JSON.parse(raw) : {}
         } catch {
             return {}
@@ -83,23 +88,23 @@ export default function App() {
 
     // Devise native par ticker (ex: { AAPL: 'USD', LVMH: 'EUR' })
     const [currencies, setCurrencies] = useState(() => {
-        try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.currencies) || '{}') } catch { return {} }
+        try { return JSON.parse(localStorage.getItem(storageKey('currencies')) || '{}') } catch { return {} }
     })
     const [assetMetadata, setAssetMetadata] = useState(() => {
-        try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.assetMetadata) || '{}') } catch { return {} }
+        try { return JSON.parse(localStorage.getItem(storageKey('assetMetadata')) || '{}') } catch { return {} }
     })
     const [tagCatalog, setTagCatalog] = useState(() => {
-        try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.tagCatalog) || '["Action","ETF","PEA","CTO"]') } catch { return ['Action', 'ETF', 'PEA', 'CTO'] }
+        try { return JSON.parse(localStorage.getItem(storageKey('tagCatalog')) || '["Action","ETF","PEA","CTO"]') } catch { return ['Action', 'ETF', 'PEA', 'CTO'] }
     })
     // Taux de change EUR/USD en temps réel (fallback : 1.085)
     const [forexRate, setForexRate] = useState(() => {
         try {
-            const cached = JSON.parse(localStorage.getItem(STORAGE_KEYS.forex) || '{}')
+            const cached = JSON.parse(localStorage.getItem(storageKey('forex')) || '{}')
             return Number(cached.USD || cached.EURUSD) || 1.085
         } catch { return 1.085 }
     })
     const [forexRates, setForexRates] = useState(() => {
-        try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.forex) || '{"EUR":1,"USD":1.085}') } catch { return { EUR: 1, USD: 1.085 } }
+        try { return JSON.parse(localStorage.getItem(storageKey('forex')) || '{"EUR":1,"USD":1.085}') } catch { return { EUR: 1, USD: 1.085 } }
     })
 
     const [loading, setLoading] = useState(true)
@@ -110,7 +115,7 @@ export default function App() {
     const [prefillData, setPrefillData] = useState(null)
     const [toast, setToast] = useState(null) // { message, type: 'success' | 'error' }
     const [pendingSync, setPendingSync] = useState(() => {
-        try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.pendingSync) || '[]') } catch { return [] }
+        try { return JSON.parse(localStorage.getItem(storageKey('pendingSync')) || '[]') } catch { return [] }
     })
     const [importPreview, setImportPreview] = useState(null)
     const [importMode, setImportMode] = useState('append')
@@ -119,7 +124,7 @@ export default function App() {
     // Sauvegarde continue dans le localStorage en double sécurité
     useEffect(() => {
         try {
-            localStorage.setItem(STORAGE_KEYS.transactions, JSON.stringify(transactions))
+            localStorage.setItem(storageKey('transactions'), JSON.stringify(transactions))
         } catch (e) {
             // no-op
         }
@@ -127,21 +132,21 @@ export default function App() {
 
     useEffect(() => {
         try {
-            localStorage.setItem(STORAGE_KEYS.prices, JSON.stringify(prices))
+            localStorage.setItem(storageKey('prices'), JSON.stringify(prices))
         } catch (e) {
             // no-op
         }
     }, [prices])
 
     useEffect(() => {
-        try { localStorage.setItem(STORAGE_KEYS.currencies, JSON.stringify(currencies)) } catch {}
+        try { localStorage.setItem(storageKey('currencies'), JSON.stringify(currencies)) } catch {}
     }, [currencies])
 
     useEffect(() => {
-        try { localStorage.setItem(STORAGE_KEYS.assetMetadata, JSON.stringify(assetMetadata)) } catch {}
+        try { localStorage.setItem(storageKey('assetMetadata'), JSON.stringify(assetMetadata)) } catch {}
     }, [assetMetadata])
     useEffect(() => {
-        try { localStorage.setItem(STORAGE_KEYS.tagCatalog, JSON.stringify(tagCatalog)) } catch {}
+        try { localStorage.setItem(storageKey('tagCatalog'), JSON.stringify(tagCatalog)) } catch {}
     }, [tagCatalog])
 
     function updateAssetMetadata(ticker, updates) {
@@ -154,12 +159,22 @@ export default function App() {
     }
 
     useEffect(() => {
-        try { localStorage.setItem(STORAGE_KEYS.forex, JSON.stringify(forexRates)) } catch {}
+        try { localStorage.setItem(storageKey('forex'), JSON.stringify(forexRates)) } catch {}
     }, [forexRates])
 
     useEffect(() => {
-        try { localStorage.setItem(STORAGE_KEYS.pendingSync, JSON.stringify(pendingSync)) } catch {}
+        try { localStorage.setItem(storageKey('pendingSync'), JSON.stringify(pendingSync)) } catch {}
     }, [pendingSync])
+
+    useEffect(() => {
+        if (!user || !settingsReady) return undefined
+        const timeout = setTimeout(() => {
+            savePortfolioSettings({ currencies, assetMetadata, tagCatalog }).catch((error) => {
+                console.warn('Impossible de synchroniser les réglages Supabase :', error)
+            })
+        }, 350)
+        return () => clearTimeout(timeout)
+    }, [user?.id, settingsReady, currencies, assetMetadata, tagCatalog])
 
     function queuePendingSync(operation) {
         setPendingSync((current) => [...current, operation])
@@ -198,6 +213,11 @@ export default function App() {
 
                 if (Object.keys(newPrices).length > 0) {
                     setPrices((prev) => ({ ...prev, ...newPrices }))
+                    if (user) {
+                        savePrices(newPrices, newCurrencies).catch((error) => {
+                            console.warn('Impossible de synchroniser les cours Supabase :', error)
+                        })
+                    }
                     const now = new Date()
                     setLastRefreshTime(
                         now.toLocaleTimeString('fr-FR', {
@@ -225,7 +245,7 @@ export default function App() {
                 setIsRefreshing(false)
             }
         },
-        [],
+        [user?.id],
     )
 
     // Chargement initial des données depuis le serveur
@@ -233,15 +253,16 @@ export default function App() {
         async function loadData() {
             try {
                 setLoading(true)
-                let [transactionsData, pricesRes, forexRes] = await Promise.all([
+                let [transactionsData, pricesRes, forexRes, settingsRes] = await Promise.all([
                     getTransactions(),
                     getPrices(),
                     getForexRate().catch(() => null),
+                    getPortfolioSettings(),
                 ])
 
                 let queuedOperations = []
                 try {
-                    const savedOperations = JSON.parse(localStorage.getItem(STORAGE_KEYS.pendingSync) || '[]')
+                    const savedOperations = JSON.parse(localStorage.getItem(storageKey('pendingSync')) || '[]')
                     if (Array.isArray(savedOperations)) queuedOperations = savedOperations
                 } catch {}
                 for (const operation of queuedOperations) {
@@ -262,6 +283,13 @@ export default function App() {
                 if (Array.isArray(transactionsData)) {
                     setTransactions(transactionsData)
                     setIsOffline(false)
+                }
+
+                if (user) {
+                    setCurrencies((prev) => ({ ...prev, ...(settingsRes?.currencies || {}) }))
+                    setAssetMetadata(settingsRes?.assetMetadata || {})
+                    setTagCatalog(settingsRes?.tagCatalog || ['Action', 'ETF', 'PEA', 'CTO'])
+                    setSettingsReady(true)
                 }
 
                 // getPrices retourne { prices: {...}, currencies: {...} } OU directement un objet de prix
@@ -304,7 +332,7 @@ export default function App() {
         }
 
         loadData()
-    }, [refreshQuotesForTickers, showToast])
+    }, [refreshQuotesForTickers, showToast, user?.id])
 
     // Calcul du portefeuille (tout consolidé en EUR)
     const snapshot = useMemo(() => {
@@ -673,6 +701,22 @@ export default function App() {
                             <span>Exporter</span>
                         </button>
 
+                        <input ref={importFileInput} type="file" accept=".json,.csv,text/csv,application/json" onChange={handleImport} hidden />
+                        <button type="button" className="btn-header-action" onClick={() => importFileInput.current?.click()} title="Importer un portefeuille JSON ou CSV">
+                            <Upload size={15} />
+                            <span>Importer</span>
+                        </button>
+
+                        {user && (
+                            <>
+                                <span className="signed-in-email" title={user.email}>{user.email}</span>
+                                <button type="button" className="btn-header-action" onClick={onSignOut} title="Se déconnecter">
+                                    <LogOut size={15} />
+                                    <span>Déconnexion</span>
+                                </button>
+                            </>
+                        )}
+
                        
                     </div>
                 </div>
@@ -704,7 +748,6 @@ export default function App() {
                     currentTab={currentTab}
                     onChange={setCurrentTab}
                     positionsCount={snapshot.positions.length}
-                    transactionsCount={transactions.length}
                 />
 
                 {loading ? (

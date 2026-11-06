@@ -1469,6 +1469,111 @@ button, input, select, textarea {
   }
 }
 
+/* Portfolio-wide polish */
+.app-header {
+  background: color-mix(in srgb, var(--surface-card) 92%, transparent);
+  border-bottom-color: var(--border-subtle);
+}
+.brand-icon { border-radius: 13px; }
+.nav-tabs {
+  gap: 0.35rem;
+  padding: 0.35rem;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.nav-tab-btn {
+  min-height: 42px;
+  padding: 0.65rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+.nav-tab-btn:hover { background: var(--surface-card); border-color: var(--border-subtle); }
+.nav-tab-btn.active {
+  background: var(--surface-card);
+  border-color: var(--border-subtle);
+  color: var(--color-accent);
+  box-shadow: var(--shadow-sm);
+}
+.nav-tab-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.card, .kpi-card { border-color: var(--border-subtle); }
+.card { box-shadow: 0 2px 10px rgb(15 23 42 / 3%); }
+.positions-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.2rem; }
+.positions-header .card-title { font-size: 1.18rem; }
+.positions-header .card-subtitle { max-width: 680px; line-height: 1.55; }
+.positions-card .table-toolbar {
+  margin: 0 0 1rem;
+  padding: 0.8rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-subtle);
+}
+.positions-card .search-bar { min-width: 240px; }
+.positions-card .search-bar input { min-height: 40px; background: var(--surface-card); }
+.positions-card .table-toolbar select { min-height: 40px; max-width: 210px; border-radius: var(--radius-md); }
+.positions-card .table-wrap { border: 1px solid var(--border-subtle); border-radius: 12px; }
+.positions-card .modern-table { min-width: 1080px; }
+.positions-card .modern-table th {
+  padding-top: 13px;
+  padding-bottom: 13px;
+  background: var(--surface-subtle);
+  border-bottom-color: var(--border-default);
+  font-size: 0.68rem;
+  letter-spacing: 0.065em;
+}
+.positions-card .modern-table td { padding: 13px 12px; font-variant-numeric: tabular-nums; }
+.positions-card .table-row { transition: background-color 0.15s ease; }
+.positions-card .table-row:hover td { background: color-mix(in srgb, var(--color-accent-bg) 55%, var(--surface-card)); }
+.positions-card .ticker-sym { font-size: 0.88rem; letter-spacing: -0.015em; }
+.positions-card .ticker-name { font-size: 0.68rem; letter-spacing: 0.035em; }
+.positions-card .asset-tag-chips { margin-top: 0.3rem; }
+.positions-card .asset-tag-chip { border: 1px solid color-mix(in srgb, var(--color-accent) 16%, transparent); }
+.positions-card .pnl-badge { display: inline-block; padding: 0.25rem 0.48rem; border-radius: 7px; font-size: 0.78rem; }
+.positions-card .pnl-badge.pos { background: var(--color-success-bg); }
+.positions-card .pnl-badge.neg { background: var(--color-danger-bg); }
+.positions-card .pnl-sub { margin-top: 0.2rem; font-size: 0.68rem; }
+.positions-card .weight-bar-bg { width: 72px; height: 5px; }
+.positions-card .icon-action-btn { min-height: 31px; padding: 0.3rem 0.55rem; background: transparent; }
+.positions-card .icon-action-btn:hover { transform: translateY(-1px); }
+
+.auth-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 1.5rem;
+  background: radial-gradient(ellipse at top, var(--color-accent-bg), transparent 55%), var(--bg-app);
+}
+.auth-card {
+  display: flex;
+  width: min(100%, 410px);
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 2.25rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  background: var(--surface-card);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+.auth-icon { color: var(--color-accent); }
+.auth-card h1 { color: var(--text-primary); font-size: 1.35rem; }
+.auth-card p { color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; }
+.auth-google-button { justify-content: center; width: 100%; margin-top: 0.35rem; }
+.auth-error { display: flex; align-items: center; gap: 0.5rem; color: var(--color-danger); font-size: 0.82rem; }
+.signed-in-email { max-width: 220px; overflow: hidden; color: var(--text-muted); font-size: 0.76rem; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .nav-tabs { margin-inline: -0.25rem; }
+  .nav-tab-btn { padding: 0.6rem 0.75rem; font-size: 0.8rem; }
+  .positions-card { padding: 1rem; }
+  .positions-card .table-toolbar { padding: 0.65rem; }
+  .positions-card .search-bar { min-width: 100%; max-width: none; }
+  .positions-card .table-toolbar select { flex: 1 1 100%; max-width: none; }
+  .signed-in-email { display: none; }
+}
+
 /* Import, historical rates and income operations */
 .currency-field {
   min-width: 105px;
