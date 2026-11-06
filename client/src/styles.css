@@ -1561,6 +1561,11 @@ button, input, select, textarea {
 .auth-card h1 { color: var(--text-primary); font-size: 1.35rem; }
 .auth-card p { color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; }
 .auth-google-button { justify-content: center; width: 100%; margin-top: 0.35rem; }
+.auth-form { display: grid; gap: 0.55rem; margin-top: 1rem; }
+.auth-form label { color: var(--text-secondary); font-size: 0.82rem; }
+.auth-form input { width: 100%; padding: 0.7rem 0.8rem; border: 1px solid var(--border-color); border-radius: 0.55rem; background: var(--bg-secondary); color: var(--text-primary); }
+.auth-mode-toggle { display: block; margin: 0.85rem auto 0; border: 0; background: none; color: var(--text-secondary); cursor: pointer; font: inherit; font-size: 0.85rem; }
+.auth-mode-toggle:hover { color: var(--text-primary); }
 .auth-error { display: flex; align-items: center; gap: 0.5rem; color: var(--color-danger); font-size: 0.82rem; }
 .signed-in-email { max-width: 220px; overflow: hidden; color: var(--text-muted); font-size: 0.76rem; text-overflow: ellipsis; white-space: nowrap; }
 

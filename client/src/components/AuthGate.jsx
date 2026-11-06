@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ShieldCheck, LogIn, AlertCircle } from 'lucide-react'
+import { ShieldCheck, LogIn, AlertCircle, UserPlus } from 'lucide-react'
 import App from '../App'
 import { supabase, supabaseConfigured } from '../lib/supabase'
 
@@ -8,6 +8,9 @@ export default function AuthGate() {
     const [loading, setLoading] = useState(supabaseConfigured)
     const [signingIn, setSigningIn] = useState(false)
     const [error, setError] = useState('')
+    const [email, setEmail] = useState('')
+    const [password, setPassword] = useState('')
+    const [isSignUp, setIsSignUp] = useState(false)
 
     useEffect(() => {
         if (!supabase) return undefined
@@ -28,15 +31,22 @@ export default function AuthGate() {
         }
     }, [])
 
-    async function signInWithGoogle() {
+    async function submitCredentials(event) {
+        event.preventDefault()
         setSigningIn(true)
         setError('')
-        const { error: signInError } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: { redirectTo: window.location.origin },
-        })
-        if (signInError) {
-            setError(signInError.message)
+        try {
+            if (isSignUp) {
+                const { data, error: signUpError } = await supabase.auth.signUp({ email, password })
+                if (signUpError) throw signUpError
+                if (!data.session) setError('Compte créé. Vérifie tes e-mails pour confirmer ton adresse avant de te connecter.')
+            } else {
+                const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+                if (signInError) throw signInError
+            }
+        } catch (authError) {
+            setError(authError.message || 'Impossible de se connecter.')
+        } finally {
             setSigningIn(false)
         }
     }
@@ -64,10 +74,20 @@ export default function AuthGate() {
                 <section className="auth-card">
                     <ShieldCheck size={32} className="auth-icon" />
                     <h1>Mon portefeuille</h1>
-                    <p>Connecte-toi avec Google pour accéder à tes données. Chaque compte dispose de son propre portefeuille.</p>
+                    <p>Connecte-toi ou crée un compte. Chaque compte dispose de son propre portefeuille.</p>
                     {error && <div className="auth-error"><AlertCircle size={16} />{error}</div>}
-                    <button type="button" className="btn-primary auth-google-button" onClick={signInWithGoogle} disabled={signingIn}>
-                        <LogIn size={17} />{signingIn ? 'Redirection vers Google…' : 'Continuer avec Google'}
+                    <form className="auth-form" onSubmit={submitCredentials}>
+                        <label htmlFor="auth-email">Adresse e-mail</label>
+                        <input id="auth-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} />
+                        <label htmlFor="auth-password">Mot de passe</label>
+                        <input id="auth-password" type="password" autoComplete={isSignUp ? 'new-password' : 'current-password'} minLength={6} required value={password} onChange={(event) => setPassword(event.target.value)} />
+                        <button type="submit" className="btn-primary auth-google-button" disabled={signingIn}>
+                            {isSignUp ? <UserPlus size={17} /> : <LogIn size={17} />}
+                            {signingIn ? 'Patiente…' : isSignUp ? 'Créer mon compte' : 'Se connecter'}
+                        </button>
+                    </form>
+                    <button type="button" className="auth-mode-toggle" onClick={() => { setIsSignUp((value) => !value); setError('') }}>
+                        {isSignUp ? 'J’ai déjà un compte' : 'Créer un compte'}
                     </button>
                 </section>
             </div>
