@@ -19,6 +19,7 @@ const DATA_FILE = path.join(DATA_DIR, "portfolio-data.json");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const IS_HOSTED_PRODUCTION = process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
 
 // Initialisation unique du client Prisma au niveau module (Singleton)
 const adapter = new PrismaBetterSqlite3({
@@ -318,7 +319,7 @@ app.use(express.json({ limit: "10mb" }));
 // Keep the legacy local-only endpoints unavailable on a public deployment.
 app.use((req, res, next) => {
   if (
-    process.env.NODE_ENV === "production" &&
+    IS_HOSTED_PRODUCTION &&
     /^\/api\/(transactions|prices)(\/|$)/.test(req.path)
   ) {
     return res.status(404).json({ error: "Cette route locale n'est pas disponible." });
@@ -606,7 +607,7 @@ app.get("/api/quotes", async (req, res) => {
     }
   }
 
-  if (hasNewPrices && process.env.NODE_ENV !== "production") {
+  if (hasNewPrices && !IS_HOSTED_PRODUCTION) {
     await syncDbToPermanentFile();
   }
 
@@ -761,7 +762,7 @@ app.post("/api/transactions/bulk", async (req, res) => {
 });
 
 // Initialiser le stockage SQLite/JSON uniquement pour le mode de développement local.
-if (process.env.NODE_ENV !== "production") {
+if (!IS_HOSTED_PRODUCTION) {
   await initPermanentStorage();
 }
 
