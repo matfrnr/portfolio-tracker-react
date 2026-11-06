@@ -3,21 +3,22 @@ import {
     formatCurrency,
     formatQty,
     formatDateFR,
+    transactionRate,
+    defaultCurrencyForTicker,
 } from '../lib/portfolio'
 import {
     Search,
     TrendingUp,
     TrendingDown,
+    Coins,
     Trash2,
     Edit3,
     AlertTriangle,
     Calendar,
-    Tag,
-    Layers,
 } from 'lucide-react'
 
-export default function HistoryView({ transactions = [], onDelete, onEdit, forexRate = 1.085 }) {
-    const [historyTab, setHistoryTab] = useState('ALL') // 'ALL' | 'BUY' | 'SELL'
+export default function HistoryView({ transactions = [], onDelete, onEdit, forexRate = 1.085, forexRates = { USD: forexRate }, currencies = {} }) {
+    const [historyTab, setHistoryTab] = useState('ALL')
     const [searchQuery, setSearchQuery] = useState('')
     const [deleteCandidate, setDeleteCandidate] = useState(null)
 
@@ -42,26 +43,29 @@ export default function HistoryView({ transactions = [], onDelete, onEdit, forex
         let totalBuy = 0
         let totalSell = 0
         let totalFees = 0
+        let dividendsNet = 0
 
         for (const tx of transactions) {
             const qty = Number(tx.quantity || 0)
             const price = Number(tx.unitPrice || 0)
             const fees = Number(tx.fees || 0)
-            const currency = tx.currency || (tx.ticker?.endsWith('.PA') ? 'EUR' : 'USD')
-            const rate = currency === 'USD' ? (tx.exchangeRate || forexRate || 1.085) : 1.0
+            const currency = tx.currency || currencies[tx.ticker] || defaultCurrencyForTicker(tx.ticker)
+            const rate = transactionRate({ ...tx, currency }, forexRates || forexRate)
 
             const feesEUR = fees / rate
             totalFees += feesEUR
 
             if (tx.type === 'BUY') {
                 totalBuy += (qty * price + fees) / rate
-            } else {
+            } else if (tx.type === 'SELL') {
                 totalSell += (qty * price - fees) / rate
+            } else if (tx.type === 'DIVIDEND') {
+                dividendsNet += (price - fees) / rate
             }
         }
 
-        return { totalBuy, totalSell, totalFees }
-    }, [transactions, forexRate])
+        return { totalBuy, totalSell, totalFees, dividendsNet }
+    }, [transactions, forexRates, forexRate, currencies])
 
     function confirmDelete() {
         if (deleteCandidate) {
@@ -76,7 +80,7 @@ export default function HistoryView({ transactions = [], onDelete, onEdit, forex
                 <div>
                     <h2 className="card-title">Historique des opérations</h2>
                     <p className="card-subtitle">
-                        Journal complet de tous vos ordres d'achat et de vente exécutés.
+                        Achats, ventes et dividendes, avec montants nets et devises de règlement.
                     </p>
                 </div>
 
@@ -87,6 +91,13 @@ export default function HistoryView({ transactions = [], onDelete, onEdit, forex
                         onClick={() => setHistoryTab('ALL')}
                     >
                         Toutes ({transactions.length})
+                    </button>
+                    <button
+                        type="button"
+                        className={historyTab === 'DIVIDEND' ? 'type-btn active dividend' : 'type-btn'}
+                        onClick={() => setHistoryTab('DIVIDEND')}
+                    >
+                        Dividendes ({transactions.filter((t) => t.type === 'DIVIDEND').length})
                     </button>
                     <button
                         type="button"
@@ -120,9 +131,15 @@ export default function HistoryView({ transactions = [], onDelete, onEdit, forex
                     </strong>
                 </div>
                 <div className="mini-stat">
-                    <span className="mini-stat-label">Frais de courtage cumulés</span>
+                    <span className="mini-stat-label">Frais et retenues cumulés</span>
                     <strong className="mini-stat-val text-muted">
                         {formatCurrency(stats.totalFees)}
+                    </strong>
+                </div>
+                <div className="mini-stat">
+                    <span className="mini-stat-label">Dividendes nets perçus</span>
+                    <strong className="mini-stat-val text-success">
+                        {formatCurrency(stats.dividendsNet)}
                     </strong>
                 </div>
             </div>
@@ -151,34 +168,33 @@ export default function HistoryView({ transactions = [], onDelete, onEdit, forex
                 <div className="history-list">
                     {filteredTransactions.map((tx) => {
                         const isBuy = tx.type === 'BUY'
+                        const isSell = tx.type === 'SELL'
+                        const isDividend = tx.type === 'DIVIDEND'
                         const quantity = Number(tx.quantity || 0)
                         const unitPrice = Number(tx.unitPrice || 0)
                         const fees = Number(tx.fees || 0)
-                        const gross = quantity * unitPrice
+                        const gross = isDividend ? unitPrice : quantity * unitPrice
                         const netTotal = isBuy ? gross + fees : gross - fees
-                        const currency = tx.currency || (tx.ticker?.endsWith('.PA') ? 'EUR' : 'USD')
-                        const rate = currency === 'USD' ? (tx.exchangeRate || forexRate || 1.085) : 1.0
+                        const currency = tx.currency || currencies[tx.ticker] || defaultCurrencyForTicker(tx.ticker)
+                        const rate = transactionRate({ ...tx, currency }, forexRates || forexRate)
                         const netTotalEUR = netTotal / rate
 
                         return (
                             <div key={tx.id} className="history-item">
                                 <div className="history-left">
-                                    <div className={`history-type-icon ${isBuy ? 'buy' : 'sell'}`}>
-                                        {isBuy ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
+                                    <div className={`history-type-icon ${isBuy ? 'buy' : isSell ? 'sell' : 'dividend'}`}>
+                                        {isBuy ? <TrendingUp size={18} /> : isSell ? <TrendingDown size={18} /> : <Coins size={18} />}
                                     </div>
 
                                     <div className="history-details">
                                         <div className="history-title-line">
-                                            <span className="ticker-sym">{tx.ticker}</span>
-                                            {tx.name && tx.name !== tx.ticker && (
-                                                <span className="ticker-name-muted">({tx.name})</span>
-                                            )}
-                                            <span className={`badge ${isBuy ? 'badge-buy' : 'badge-sell'}`}>
-                                                {isBuy ? 'Achat' : 'Vente'}
+                                            <span className="history-asset-name">{tx.name || tx.ticker}<small>{tx.ticker}</small></span>
+                                            <span className={`badge ${isBuy ? 'badge-buy' : isSell ? 'badge-sell' : 'badge-dividend'}`}>
+                                                {isBuy ? 'Achat' : isSell ? 'Vente' : 'Dividende'}
                                             </span>
-                                            {currency === 'USD' && (
+                                            {currency !== 'EUR' && (
                                                 <span className="badge badge-buy" style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}>
-                                                    USD
+                                                    {currency}
                                                 </span>
                                             )}
                                         </div>
@@ -190,13 +206,13 @@ export default function HistoryView({ transactions = [], onDelete, onEdit, forex
                                             </span>
                                             <span>·</span>
                                             <span>
-                                                {formatQty(tx.quantity)} part(s) à {formatCurrency(tx.unitPrice, currency)}
+                                                {isDividend ? `Montant brut : ${formatCurrency(tx.unitPrice, currency)}` : `${formatQty(tx.quantity)} part(s) à ${formatCurrency(tx.unitPrice, currency)}`}
                                             </span>
                                             {fees > 0 && (
                                                 <>
                                                     <span>·</span>
                                                     <span className="text-muted">
-                                                        Frais : {formatCurrency(fees, currency)}
+                                                {isDividend ? 'Retenue / frais' : 'Frais'} : {formatCurrency(fees, currency)}
                                                     </span>
                                                 </>
                                             )}
@@ -216,8 +232,8 @@ export default function HistoryView({ transactions = [], onDelete, onEdit, forex
                                             {isBuy ? '-' : '+'}{formatCurrency(netTotal, currency)}
                                         </div>
                                         <span className="history-amount-label">
-                                            {isBuy ? 'Coût total net' : 'Produit net perçu'}
-                                            {currency === 'USD' && (
+                                            {isBuy ? 'Coût total avec frais' : isSell ? 'Produit net perçu' : 'Dividende net perçu'}
+                                            {currency !== 'EUR' && (
                                                 <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                                                     (≈ {formatCurrency(netTotalEUR, 'EUR')})
                                                 </span>
@@ -261,8 +277,11 @@ export default function HistoryView({ transactions = [], onDelete, onEdit, forex
                         <p className="modal-body">
                             Êtes-vous sûr de vouloir supprimer l'opération{' '}
                             <strong>
-                                {deleteCandidate.type === 'BUY' ? "d'achat" : 'de vente'} de{' '}
-                                {formatQty(deleteCandidate.quantity)} {deleteCandidate.ticker}
+                                {deleteCandidate.type === 'BUY'
+                                    ? `d'achat de ${formatQty(deleteCandidate.quantity)} ${deleteCandidate.ticker}`
+                                    : deleteCandidate.type === 'SELL'
+                                        ? `de vente de ${formatQty(deleteCandidate.quantity)} ${deleteCandidate.ticker}`
+                                        : `de dividende ${deleteCandidate.ticker}`}
                             </strong>{' '}
                             du {formatDateFR(deleteCandidate.date)} ?
                         </p>

@@ -58,7 +58,7 @@ npm run dev:client
 - 📊 **Tableau de bord interactif** :
   - **Graphique Donut** (Recharts) d'allocation du portefeuille par actif.
   - **Graphique à barres** des plus-values et moins-values latentes (€) par ligne.
-  - **KPIs en temps réel** : Valeur totale, capital investi, plus-values latentes et réalisées, rendement global.
+  - **KPIs** : valeur des positions, capital encore investi, plus-values latentes et réalisées, dividendes nets et performance cumulée.
 - 💼 **Positions ouvertes** :
   - Valorisation en temps réel (Qté × Cours).
   - Poids de chaque ligne dans le portefeuille (%).
@@ -67,14 +67,23 @@ npm run dev:client
   - Tri multi-colonnes et barre de recherche instantanée.
 - ➕ **Enregistrement de transactions** :
   - **Autocomplétion dynamique** : tapez un symbole ou un nom d'entreprise (ex. *AAPL*, *MC.PA*, *CW8.PA*...) pour récupérer automatiquement son cours en direct et son nom.
-  - Contrôle anti-survente empêchant d'enregistrer une vente supérieure aux parts détenues.
+  - Transactions **achat, vente et dividende**; le dividende se saisit en montant brut avec retenues fiscales/frais.
+  - Contrôle chronologique des ventes : une vente ne peut pas dépasser les titres détenus à sa date.
   - Calcul instantané du montant brut, des frais et du montant net crédité ou débité.
+  - Taux de change enregistré pour chaque opération étrangère; le taux historique reste modifiable.
 - 📜 **Historique des opérations** :
-  - Journal complet triable et filtrable par type (*Tous*, *Achats*, *Ventes*) ou par mot-clé.
+  - Journal complet triable et filtrable par type (*Tous*, *Achats*, *Ventes*, *Dividendes*) ou par mot-clé.
   - Modification et suppression sécurisée avec boîte de dialogue de confirmation.
 - 💾 **Sauvegarde & Portabilité** :
   - Exportation complète du portefeuille au format **JSON**.
-  - Réimportation facile à tout moment.
+  - Importation des opérations depuis un **CSV** (modèle téléchargeable) ou restauration depuis un JSON, avec aperçu et choix entre ajout et remplacement de l'historique.
+
+### Base de calcul
+
+- Les achats augmentent le PRU avec les frais; les ventes réalisent un gain ou une perte selon le coût moyen des titres vendus et les frais de vente.
+- La performance cumulée additionne gains/pertes réalisés, gains/pertes latents et dividendes nets, puis la rapporte au total des achats cumulés. C'est une mesure simple de suivi, pas un rendement annualisé ou pondéré par les flux (TRI/XIRR).
+- La valeur affichée correspond aux positions boursières. Les liquidités du compte (dépôts, retraits et solde espèces) ne sont pas suivies.
+- Pour les devises étrangères, `exchangeRate` dans le CSV signifie **nombre d'unités de devise pour 1 €**. Si ce champ manque, l'application prévient et utilise le taux actuel comme estimation.
 
 ---
 

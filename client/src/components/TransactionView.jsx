@@ -4,23 +4,21 @@ import {
     formatQty,
     toISODateString,
     getAvailableQuantity,
+    exchangeRateFor,
+    hasExchangeRate,
+    defaultCurrencyForTicker,
     parseNumber,
     getTodayISODate,
 } from '../lib/portfolio'
-import { searchTickers, fetchLiveQuotes } from '../api/prices'
+import { searchTickers, fetchLiveQuotes, getForexRate } from '../api/prices'
 import {
     Search,
     TrendingUp,
     TrendingDown,
     Calendar,
     Coins,
-    FileText,
-    Sparkles,
     CheckCircle2,
     AlertCircle,
-    X,
-    DollarSign,
-    Euro,
 } from 'lucide-react'
 
 const emptyForm = {
@@ -28,6 +26,7 @@ const emptyForm = {
     ticker: '',
     name: '',
     currency: 'EUR',
+    exchangeRate: '1',
     date: getTodayISODate(),
     quantity: '',
     unitPrice: '',
@@ -42,8 +41,11 @@ export default function TransactionView({
     onCancelEdit,
     currentPrice,
     transactions = [],
+    positions = [],
+    currencies = {},
     prefillData = null,
     forexRate = 1.085,
+    forexRates = { EUR: 1, USD: forexRate },
 }) {
     const [form, setForm] = useState(emptyForm)
     const [suggestions, setSuggestions] = useState([])
@@ -52,14 +54,36 @@ export default function TransactionView({
     const searchTimeoutRef = useRef(null)
     const suggestionBoxRef = useRef(null)
 
+    const transactionAssets = useMemo(() => {
+        const assets = positions.map((position) => ({
+            ticker: position.ticker,
+            name: position.name || position.ticker,
+            currency: position.currency || currencies[position.ticker] || defaultCurrencyForTicker(position.ticker),
+            currentPrice: position.currentPrice,
+        }))
+        if (editingTransaction?.ticker && !assets.some((asset) => asset.ticker === editingTransaction.ticker)) {
+            assets.push({
+                ticker: editingTransaction.ticker,
+                name: editingTransaction.name || editingTransaction.ticker,
+                currency: editingTransaction.currency || currencies[editingTransaction.ticker] || defaultCurrencyForTicker(editingTransaction.ticker),
+                currentPrice: '',
+            })
+        }
+        return assets.sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+    }, [positions, currencies, editingTransaction?.id, editingTransaction?.ticker])
+
     // Charger les données en cas d'édition ou de préremplissage
     useEffect(() => {
         if (editingTransaction) {
+            const editCurrency = editingTransaction.currency || currencies[editingTransaction.ticker] || defaultCurrencyForTicker(editingTransaction.ticker)
+            const savedRate = Number(editingTransaction.exchangeRate)
+            const hasSavedRate = savedRate > 0 && !(editCurrency === 'USD' && savedRate === 1)
             setForm({
                 type: editingTransaction.type,
                 ticker: editingTransaction.ticker,
                 name: editingTransaction.name || '',
-                currency: editingTransaction.currency || (editingTransaction.ticker.endsWith('.PA') ? 'EUR' : 'USD'),
+                currency: editCurrency,
+                exchangeRate: editCurrency === 'EUR' ? '1' : hasSavedRate ? String(savedRate) : '',
                 date: toISODateString(editingTransaction.date),
                 quantity: String(editingTransaction.quantity),
                 unitPrice: String(editingTransaction.unitPrice),
@@ -71,13 +95,15 @@ export default function TransactionView({
                 note: editingTransaction.note || '',
             })
         } else if (prefillData) {
-            const detectedCurr = prefillData.currency || (prefillData.ticker?.endsWith('.PA') ? 'EUR' : 'USD')
+            const detectedCurr = prefillData.currency || defaultCurrencyForTicker(prefillData.ticker)
+            const prefillRate = exchangeRateFor(detectedCurr, forexRates, forexRate)
             setForm({
                 ...emptyForm,
                 type: prefillData.type || 'BUY',
                 ticker: prefillData.ticker || '',
                 name: prefillData.name || '',
                 currency: detectedCurr,
+                exchangeRate: detectedCurr === 'EUR' || hasExchangeRate(detectedCurr, forexRates) ? String(prefillRate) : '',
                 unitPrice: prefillData.currentPrice ? String(prefillData.currentPrice) : '',
                 currentPrice: prefillData.currentPrice ? String(prefillData.currentPrice) : '',
                 date: getTodayISODate(),
@@ -88,7 +114,7 @@ export default function TransactionView({
                 date: getTodayISODate(),
             })
         }
-    }, [editingTransaction, currentPrice, prefillData])
+    }, [editingTransaction?.id, prefillData?.ticker, prefillData?.type])
 
     // Fermer les suggestions lors d'un clic extérieur
     useEffect(() => {
@@ -116,8 +142,8 @@ export default function TransactionView({
         const quantity = parseNumber(form.quantity, 0)
         const unitPrice = parseNumber(form.unitPrice, 0)
         const fees = parseNumber(form.fees, 0)
-        const grossAmount = quantity * unitPrice
-        const netAmount = form.type === 'SELL' ? grossAmount - fees : grossAmount + fees
+        const grossAmount = form.type === 'DIVIDEND' ? unitPrice : quantity * unitPrice
+        const netAmount = form.type === 'BUY' ? grossAmount + fees : grossAmount - fees
 
         return {
             gross: grossAmount,
@@ -155,16 +181,55 @@ export default function TransactionView({
         }
     }
 
+    function handleTypeChange(type) {
+        if (type === 'BUY') {
+            updateField('type', type)
+            return
+        }
+        const selected = transactionAssets.find((asset) => asset.ticker === form.ticker) || transactionAssets[0]
+        const currency = selected?.currency || form.currency
+        setForm((current) => ({
+            ...current,
+            type,
+            ticker: selected?.ticker || '',
+            name: selected?.name || '',
+            currency,
+            exchangeRate: currency === 'EUR' || hasExchangeRate(currency, forexRates)
+                ? String(exchangeRateFor(currency, forexRates, forexRate))
+                : '',
+            currentPrice: selected?.currentPrice ? String(selected.currentPrice) : current.currentPrice,
+        }))
+    }
+
+    function handleSelectOwnedAsset(ticker) {
+        const selected = transactionAssets.find((asset) => asset.ticker === ticker)
+        if (!selected) return
+        const currency = selected.currency || defaultCurrencyForTicker(ticker)
+        setForm((current) => ({
+            ...current,
+            ticker: selected.ticker,
+            name: selected.name,
+            currency,
+            exchangeRate: currency === 'EUR' || hasExchangeRate(currency, forexRates)
+                ? String(exchangeRateFor(currency, forexRates, forexRate))
+                : '',
+            currentPrice: selected.currentPrice ? String(selected.currentPrice) : current.currentPrice,
+        }))
+    }
+
     async function handleSelectSuggestion(suggestion) {
         const symbol = suggestion.symbol.toUpperCase()
         setShowSuggestions(false)
-        const detectedCurr = suggestion.currency || (symbol.endsWith('.PA') || symbol.endsWith('.MC') ? 'EUR' : 'USD')
+        const detectedCurr = suggestion.currency || defaultCurrencyForTicker(symbol)
 
         setForm((prev) => ({
             ...prev,
             ticker: symbol,
             name: suggestion.name || symbol,
             currency: detectedCurr,
+            exchangeRate: detectedCurr === 'EUR' || hasExchangeRate(detectedCurr, forexRates)
+                ? String(exchangeRateFor(detectedCurr, forexRates, forexRate))
+                : '',
         }))
 
         // Récupérer le cours en direct
@@ -173,9 +238,20 @@ export default function TransactionView({
             if (quotes[symbol]?.price) {
                 const livePrice = quotes[symbol].price
                 const quoteCurr = quotes[symbol].currency || detectedCurr
+                let quoteRate = exchangeRateFor(quoteCurr, forexRates, forexRate)
+                let quoteRateAvailable = quoteCurr === 'EUR' || hasExchangeRate(quoteCurr, forexRates)
+                try {
+                    const forex = await getForexRate([quoteCurr])
+                    const fetchedRate = Number(forex?.rates?.[quoteCurr])
+                    if (fetchedRate > 0) {
+                        quoteRate = fetchedRate
+                        quoteRateAvailable = true
+                    }
+                } catch {}
                 setForm((prev) => ({
                     ...prev,
                     currency: quoteCurr,
+                    exchangeRate: quoteCurr === 'EUR' ? '1' : quoteRateAvailable ? String(quoteRate) : '',
                     unitPrice: prev.unitPrice ? prev.unitPrice : String(livePrice),
                     currentPrice: String(livePrice),
                 }))
@@ -188,13 +264,15 @@ export default function TransactionView({
     function handleSubmit(event) {
         event.preventDefault()
 
-        const cleanQty = parseNumber(form.quantity, 0)
+        const cleanQty = form.type === 'DIVIDEND' ? 1 : parseNumber(form.quantity, 0)
         const cleanUnitPrice = parseNumber(form.unitPrice, 0)
         const cleanFees = parseNumber(form.fees, 0)
         const hasCurrentPrice = form.currentPrice !== '' && form.currentPrice !== null && form.currentPrice !== undefined
         const cleanCurrentPrice = hasCurrentPrice ? parseNumber(form.currentPrice, null) : null
-        const selectedCurrency = form.currency === 'USD' ? 'USD' : 'EUR'
-        const cleanExchangeRate = selectedCurrency === 'USD' ? (forexRate || 1.085) : 1.0
+        const selectedCurrency = form.currency || 'EUR'
+        const cleanExchangeRate = selectedCurrency === 'EUR'
+            ? 1
+            : parseNumber(form.exchangeRate, 0)
 
         onSaveTransaction({
             ...form,
@@ -222,7 +300,15 @@ export default function TransactionView({
         setShowSuggestions(false)
     }
 
-    const currencySymbol = form.currency === 'USD' ? '$' : '€'
+    const currencySymbol = (() => {
+        try {
+            return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: form.currency, maximumFractionDigits: 0 })
+                .formatToParts(0)
+                .find((part) => part.type === 'currency')?.value || form.currency
+        } catch {
+            return form.currency
+        }
+    })()
 
     return (
         <div className="card form-card">
@@ -234,17 +320,17 @@ export default function TransactionView({
                     <p className="card-subtitle">
                         {editingTransaction
                             ? 'Mettez à jour les détails de cette opération.'
-                            : "Enregistrez un ordre d'achat ou de vente en Euros ou en Dollars."}
+                            : 'Saisissez un achat, une vente ou un dividende avec sa devise et son taux de change historique.'}
                     </p>
                 </div>
 
                 <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                    {/* Sélecteur de Type Achat / Vente */}
+                    {/* Type d'opération */}
                     <div className="type-toggle">
                         <button
                             type="button"
                             className={form.type === 'BUY' ? 'type-btn active buy' : 'type-btn'}
-                            onClick={() => updateField('type', 'BUY')}
+                            onClick={() => handleTypeChange('BUY')}
                         >
                             <TrendingUp size={16} />
                             Achat
@@ -252,33 +338,39 @@ export default function TransactionView({
                         <button
                             type="button"
                             className={form.type === 'SELL' ? 'type-btn active sell' : 'type-btn'}
-                            onClick={() => updateField('type', 'SELL')}
+                            onClick={() => handleTypeChange('SELL')}
                         >
                             <TrendingDown size={16} />
                             Vente
                         </button>
+                        <button
+                            type="button"
+                            className={form.type === 'DIVIDEND' ? 'type-btn active dividend' : 'type-btn'}
+                            onClick={() => handleTypeChange('DIVIDEND')}
+                        >
+                            <Coins size={16} />
+                            Dividende
+                        </button>
                     </div>
 
-                    {/* Sélecteur de Devise EUR / USD */}
-                    <div className="type-toggle">
-                        <button
-                            type="button"
-                            className={form.currency === 'EUR' ? 'type-btn active' : 'type-btn'}
-                            onClick={() => updateField('currency', 'EUR')}
-                            title="Transaction libellée en Euros (€)"
+                    {/* Devise de règlement */}
+                    <div className="form-field currency-field">
+                        <label htmlFor="transaction-currency">Devise</label>
+                        <select
+                            id="transaction-currency"
+                            value={form.currency}
+                            onChange={(e) => setForm((current) => ({
+                                ...current,
+                                currency: e.target.value,
+                                exchangeRate: e.target.value === 'EUR' || hasExchangeRate(e.target.value, forexRates)
+                                    ? String(exchangeRateFor(e.target.value, forexRates, forexRate))
+                                    : '',
+                            }))}
                         >
-                            <Euro size={15} />
-                            EUR (€)
-                        </button>
-                        <button
-                            type="button"
-                            className={form.currency === 'USD' ? 'type-btn active' : 'type-btn'}
-                            onClick={() => updateField('currency', 'USD')}
-                            title="Transaction libellée en Dollars américains ($)"
-                        >
-                            <DollarSign size={15} />
-                            USD ($)
-                        </button>
+                            {[...new Set(['EUR', 'USD', 'GBP', 'CHF', 'CAD', 'AUD', 'JPY', 'SEK', 'NOK', 'DKK', 'CNY', 'HKD', 'NZD', 'SGD', form.currency])].map((currency) => (
+                                <option key={currency} value={currency}>{currency}</option>
+                            ))}
+                        </select>
                     </div>
                 </div>
             </div>
@@ -287,7 +379,7 @@ export default function TransactionView({
                 <div className="info-banner">
                     <AlertCircle size={16} />
                     <span>
-                        Quantité actuellement disponible pour <strong>{form.ticker.toUpperCase()}</strong> :{' '}
+                        Quantité actuellement disponible pour <strong>{form.name || form.ticker}</strong> ({form.ticker.toUpperCase()}) :{' '}
                         <strong>{formatQty(availableQty)}</strong> part(s).
                     </span>
                 </div>
@@ -295,54 +387,75 @@ export default function TransactionView({
 
             <form onSubmit={handleSubmit}>
                 <div className="form-grid">
-                    {/* Ticker avec autocomplétion */}
-                    <div className="form-field full-width" ref={suggestionBoxRef} style={{ position: 'relative' }}>
-                        <label>
-                            Ticker / Symbole boursier <span className="required">*</span>
-                        </label>
-                        <div className="input-with-icon">
-                            <Search size={16} className="input-icon" />
-                            <input
-                                value={form.ticker}
-                                onChange={(e) => updateField('ticker', e.target.value)}
-                                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                                placeholder="ex. AAPL, MC.PA, CW8.PA, MSFT, NVDA..."
-                                required
-                                autoComplete="off"
-                            />
-                            {isSearching && <span className="input-spinner" />}
-                        </div>
+                    {form.type === 'BUY' ? (
+                        <>
+                            {/* Recherche d'un nouvel actif pour les achats */}
+                            <div className="form-field full-width" ref={suggestionBoxRef} style={{ position: 'relative' }}>
+                                <label>
+                                    Ticker / Symbole boursier <span className="required">*</span>
+                                </label>
+                                <div className="input-with-icon">
+                                    <Search size={16} className="input-icon" />
+                                    <input
+                                        value={form.ticker}
+                                        onChange={(e) => updateField('ticker', e.target.value)}
+                                        onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                                        placeholder="ex. AAPL, MC.PA, CW8.PA, MSFT, NVDA..."
+                                        required
+                                        autoComplete="off"
+                                    />
+                                    {isSearching && <span className="input-spinner" />}
+                                </div>
 
-                        {showSuggestions && suggestions.length > 0 && (
-                            <div className="suggestions-dropdown">
-                                {suggestions.map((item) => (
-                                    <div
-                                        key={item.symbol}
-                                        className="suggestion-item"
-                                        onClick={() => handleSelectSuggestion(item)}
-                                    >
-                                        <div>
-                                            <span className="suggestion-symbol">{item.symbol}</span>
-                                            <span className="suggestion-name">{item.name}</span>
-                                        </div>
-                                        <span className="suggestion-exchange">
-                                            {item.currency ? `[${item.currency}] ` : ''}{item.exchange}
-                                        </span>
+                                {showSuggestions && suggestions.length > 0 && (
+                                    <div className="suggestions-dropdown">
+                                        {suggestions.map((item) => (
+                                            <div
+                                                key={item.symbol}
+                                                className="suggestion-item"
+                                                onClick={() => handleSelectSuggestion(item)}
+                                            >
+                                                <div>
+                                                    <span className="suggestion-name">{item.name}</span>
+                                                    <span className="suggestion-symbol">{item.symbol}</span>
+                                                </div>
+                                                <span className="suggestion-exchange">
+                                                    {item.currency ? `[${item.currency}] ` : ''}{item.exchange}
+                                                </span>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+                                )}
                             </div>
-                        )}
-                    </div>
 
-                    {/* Nom de l'actif */}
-                    <div className="form-field">
-                        <label>Nom de l'actif</label>
-                        <input
-                            value={form.name}
-                            onChange={(e) => updateField('name', e.target.value)}
-                            placeholder="ex. Apple Inc., LVMH..."
-                        />
-                    </div>
+                            <div className="form-field">
+                                <label>Nom de l'actif</label>
+                                <input
+                                    value={form.name}
+                                    onChange={(e) => updateField('name', e.target.value)}
+                                    placeholder="ex. Apple Inc., LVMH..."
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        <div className="form-field full-width">
+                            <label htmlFor="owned-asset-select">Actif détenu <span className="required">*</span></label>
+                            <select
+                                id="owned-asset-select"
+                                className="owned-asset-select"
+                                value={form.ticker}
+                                onChange={(event) => handleSelectOwnedAsset(event.target.value)}
+                                required
+                                disabled={transactionAssets.length === 0}
+                            >
+                                <option value="">{transactionAssets.length ? 'Choisir un actif détenu…' : 'Aucune position détenue'}</option>
+                                {transactionAssets.map((asset) => (
+                                    <option key={asset.ticker} value={asset.ticker}>{asset.name} — {asset.ticker}</option>
+                                ))}
+                            </select>
+                            {transactionAssets.length === 0 && <span className="hint">Ajoute d’abord un achat pour enregistrer une vente ou un dividende.</span>}
+                        </div>
+                    )}
 
                     {/* Date */}
                     <div className="form-field">
@@ -360,8 +473,8 @@ export default function TransactionView({
                         </div>
                     </div>
 
-                    {/* Quantité */}
-                    <div className="form-field">
+                    {/* Quantité de titres */}
+                    {form.type !== 'DIVIDEND' && <div className="form-field">
                         <label>
                             Quantité de titres <span className="required">*</span>
                         </label>
@@ -374,14 +487,16 @@ export default function TransactionView({
                             placeholder="ex. 10 ou 1.5"
                             required
                         />
-                    </div>
+                    </div>}
 
                     {/* Prix unitaire */}
                     <div className="form-field">
                         <label>
-                            {form.type === 'BUY'
-                                ? `Prix d'achat unitaire (${currencySymbol})`
-                                : `Prix de vente unitaire (${currencySymbol})`}{' '}
+                            {form.type === 'DIVIDEND'
+                                ? `Montant brut du dividende (${currencySymbol})`
+                                : form.type === 'BUY'
+                                    ? `Prix d'achat unitaire (${currencySymbol})`
+                                    : `Prix de vente unitaire (${currencySymbol})`}{' '}
                             <span className="required">*</span>
                         </label>
                         <input
@@ -396,7 +511,7 @@ export default function TransactionView({
                     </div>
 
                     {/* Cours actuel */}
-                    <div className="form-field">
+                    {form.type !== 'DIVIDEND' && <div className="form-field">
                         <label>Cours actuel du marché ({currencySymbol})</label>
                         <input
                             type="number"
@@ -409,11 +524,11 @@ export default function TransactionView({
                         <span className="hint">
                             Évalue la plus-value latente immédiatement.
                         </span>
-                    </div>
+                    </div>}
 
                     {/* Frais */}
                     <div className="form-field">
-                        <label>Frais de courtage ({currencySymbol})</label>
+                        <label>{form.type === 'DIVIDEND' ? `Retenue fiscale / frais (${currencySymbol})` : `Frais de courtage (${currencySymbol})`}</label>
                         <input
                             type="number"
                             min="0"
@@ -423,6 +538,27 @@ export default function TransactionView({
                             placeholder="0.00"
                         />
                     </div>
+
+                    {form.currency !== 'EUR' && (
+                        <div className="form-field">
+                            <label>Taux historique (1 € = {form.currency})</label>
+                            <input
+                                type="number"
+                                min="0.000001"
+                                step="any"
+                                value={form.exchangeRate}
+                                onChange={(e) => updateField('exchangeRate', e.target.value)}
+                                required
+                            />
+                            <span className="hint">
+                                {!form.exchangeRate
+                                    ? 'Aucun taux historique enregistré. Saisissez-le depuis votre relevé; ne reprenez le taux actuel que si vous n’avez pas la valeur historique.'
+                                    : hasExchangeRate(form.currency, forexRates)
+                                        ? "Saisissez le taux de la date de l'opération pour une conversion historique fidèle."
+                                        : "Taux actuel indisponible; saisissez le taux de votre relevé. 1 € doit correspondre au nombre d'unités indiqué."}
+                            </span>
+                        </div>
+                    )}
 
                     {/* Note */}
                     <div className="form-field full-width">
@@ -448,17 +584,17 @@ export default function TransactionView({
                     <div className="total-preview-divider" />
                     <div className="total-preview-item highlight">
                         <span className="preview-label">
-                            {form.type === 'SELL' ? 'Montant net crédité :' : 'Total net investi :'}
+                            {form.type === 'BUY' ? 'Total débité :' : form.type === 'SELL' ? 'Montant net crédité :' : 'Dividende net perçu :'}
                         </span>
                         <span className="preview-val total-amount">{formatCurrency(total, form.currency)}</span>
                     </div>
-                    {form.currency === 'USD' && (
+                    {form.currency !== 'EUR' && (
                         <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                             Conversion portefeuille : ≈{' '}
                             <strong style={{ color: 'var(--text-primary)' }}>
-                                {formatCurrency(total / (forexRate || 1.085), 'EUR')}
+                                {formatCurrency(total / (parseNumber(form.exchangeRate, exchangeRateFor(form.currency, forexRates, forexRate)) || 1), 'EUR')}
                             </strong>{' '}
-                            (taux EUR/USD : {Number(forexRate || 1.085).toFixed(4)})
+                            (taux 1 € = {Number(form.exchangeRate || exchangeRateFor(form.currency, forexRates, forexRate)).toFixed(4)} {form.currency})
                         </div>
                     )}
                 </div>
@@ -467,7 +603,7 @@ export default function TransactionView({
                     <button type="button" className="btn-secondary" onClick={handleReset}>
                         {editingTransaction ? 'Annuler la modification' : 'Effacer le formulaire'}
                     </button>
-                    <button type="submit" className="btn-primary">
+                    <button type="submit" className="btn-primary" disabled={form.type !== 'BUY' && transactionAssets.length === 0}>
                         <CheckCircle2 size={16} />
                         {editingTransaction ? 'Enregistrer les modifications' : 'Confirmer la transaction'}
                     </button>

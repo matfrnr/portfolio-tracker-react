@@ -1,7 +1,11 @@
-export function exportPortfolioJSON({ transactions, prices }) {
+export function exportPortfolioJSON({ transactions, prices, currencies = {}, assetMetadata = {}, tagCatalog = [] }) {
   const data = {
+    schemaVersion: 2,
     transactions,
     prices,
+    currencies,
+    assetMetadata,
+    tagCatalog,
     exportedAt: new Date().toISOString(),
   };
 
@@ -14,7 +18,7 @@ export function exportPortfolioJSON({ transactions, prices }) {
   link.href = url;
   link.download = `portefeuille-${new Date().toISOString().slice(0, 10)}.json`;
   link.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function importPortfolioJSON(file) {
@@ -37,6 +41,9 @@ export function importPortfolioJSON(file) {
         resolve({
           transactions: parsed.transactions,
           prices: parsed.prices || {},
+          currencies: parsed.currencies || {},
+          assetMetadata: parsed.assetMetadata || {},
+          tagCatalog: parsed.tagCatalog || ['Action', 'ETF', 'PEA', 'CTO'],
         });
       } catch (error) {
         reject(error);

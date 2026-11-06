@@ -9,7 +9,9 @@ async function handleResponse(response) {
       message = data.error || message;
     } catch {}
 
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
 
   if (response.status === 204) return null;
@@ -53,13 +55,13 @@ export async function deleteTransaction(id) {
   return handleResponse(response);
 }
 
-export async function bulkImportTransactions(transactions, prices = {}) {
+export async function bulkImportTransactions(transactions, prices = {}, currencies = {}, replace = false, replacePrices = false) {
   const response = await fetch(`${API_BASE}/bulk`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ transactions, prices }),
+    body: JSON.stringify({ transactions, prices, currencies, replace, replacePrices }),
   });
 
   return handleResponse(response);

@@ -29,8 +29,11 @@ export async function updatePrice(ticker, price, currency) {
     return handleResponse(response)
 }
 
-export async function getForexRate() {
-    const response = await fetch('/api/forex')
+export async function getForexRate(currencies = []) {
+    const query = Array.isArray(currencies) && currencies.length
+        ? `?currencies=${encodeURIComponent(currencies.join(','))}`
+        : ''
+    const response = await fetch(`/api/forex${query}`)
     return handleResponse(response)
 }
 
@@ -38,6 +41,13 @@ export async function fetchLiveQuotes(symbols) {
     if (!symbols || symbols.length === 0) return {}
     const query = Array.isArray(symbols) ? symbols.join(',') : symbols
     const response = await fetch(`/api/quotes?symbols=${encodeURIComponent(query)}`)
+    return handleResponse(response)
+}
+
+export async function fetchDividends(symbols) {
+    if (!symbols || symbols.length === 0) return {}
+    const query = Array.isArray(symbols) ? symbols.join(',') : symbols
+    const response = await fetch(`/api/dividends?symbols=${encodeURIComponent(query)}`)
     return handleResponse(response)
 }
 

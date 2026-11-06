@@ -24,11 +24,18 @@ export default function PositionsView({
     lastRefreshTime,
     onQuickAction,
     forexRate = 1.085,
+    assetMetadata = {},
+    onAssetMetadataChange,
+    tagCatalog = [],
+    onTagCatalogChange,
 }) {
     const [searchQuery, setSearchQuery] = useState('')
     const [sortField, setSortField] = useState('marketValue')
     const [sortAsc, setSortAsc] = useState(false)
     const [localPrices, setLocalPrices] = useState({})
+    const [tagDraft, setTagDraft] = useState('')
+    const [tagFilter, setTagFilter] = useState('')
+    const [editingPru, setEditingPru] = useState(null)
 
     // Réinitialiser les prix locaux quand les positions changent depuis l'extérieur (ex: refresh)
     useEffect(() => {
@@ -39,6 +46,9 @@ export default function PositionsView({
     const filteredPositions = useMemo(() => {
         let result = positions.filter((pos) => {
             const query = searchQuery.trim().toLowerCase()
+            const rawTags = assetMetadata[pos.ticker]?.tags || []
+            const tags = Array.isArray(rawTags) ? rawTags : String(rawTags).split(',').map((tag) => tag.trim())
+            if (tagFilter && !tags.includes(tagFilter)) return false
             if (!query) return true
             return (
                 pos.ticker.toLowerCase().includes(query) ||
@@ -47,8 +57,8 @@ export default function PositionsView({
         })
 
         result.sort((a, b) => {
-            let valA = a[sortField]
-            let valB = b[sortField]
+            let valA = sortField === 'tags' ? (Array.isArray(assetMetadata[a.ticker]?.tags) ? assetMetadata[a.ticker].tags.join(',') : String(assetMetadata[a.ticker]?.tags || '')) : sortField === 'unrealizedPnL' ? a.unrealizedPnLNative : a[sortField]
+            let valB = sortField === 'tags' ? (Array.isArray(assetMetadata[b.ticker]?.tags) ? assetMetadata[b.ticker].tags.join(',') : String(assetMetadata[b.ticker]?.tags || '')) : sortField === 'unrealizedPnL' ? b.unrealizedPnLNative : b[sortField]
 
             if (typeof valA === 'string') {
                 valA = valA.toLowerCase()
@@ -62,7 +72,7 @@ export default function PositionsView({
         })
 
         return result
-    }, [positions, searchQuery, sortField, sortAsc])
+    }, [positions, searchQuery, sortField, sortAsc, assetMetadata, tagFilter])
 
     function handleSort(field) {
         if (sortField === field) {
@@ -81,7 +91,7 @@ export default function PositionsView({
         if (ticker in localPrices) {
             const raw = String(localPrices[ticker]).trim().replace(/\s+/g, '').replace(',', '.')
             const parsed = parseFloat(raw)
-            if (!isNaN(parsed) && parsed >= 0 && parsed !== initialPrice) {
+            if (!isNaN(parsed) && parsed > 0 && parsed !== initialPrice) {
                 onPriceChange(ticker, parsed)
             }
             // Nettoyer le prix local après application pour afficher la valeur server
@@ -110,20 +120,7 @@ export default function PositionsView({
                     </p>
                 </div>
 
-                <div className="header-actions">
-                    {onRefreshLivePrices && (
-                        <button
-                            type="button"
-                            className="btn-secondary refresh-btn"
-                            onClick={onRefreshLivePrices}
-                            disabled={isRefreshing}
-                            title="Actualiser les cours en direct"
-                        >
-                            <RefreshCw size={14} className={isRefreshing ? 'spin-icon' : ''} />
-                            {isRefreshing ? 'Actualisation...' : 'Actualiser les cours'}
-                        </button>
-                    )}
-                </div>
+              
             </div>
 
             {/* Barre d'outils et recherche */}
@@ -137,18 +134,16 @@ export default function PositionsView({
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
-
-                {lastRefreshTime && (
-                    <div className="last-sync-badge">
-                        <Sparkles size={12} />
-                        Cours : {lastRefreshTime}
-                    </div>
-                )}
-                {forexRate && (
-                    <div className="last-sync-badge" title="Taux de change réel EUR/USD">
-                        💱 1 € = {Number(forexRate).toFixed(4)} $
-                    </div>
-                )}
+                <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} aria-label="Filtrer par étiquette">
+                    <option value="">Toutes les étiquettes</option>
+                    {tagCatalog.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+                </select>
+                <select value={sortField} onChange={(e) => setSortField(e.target.value)} aria-label="Trier les positions">
+                    <option value="marketValue">Trier : valeur</option>
+                    <option value="ticker">Trier : nom</option>
+                    <option value="tags">Trier : étiquette</option>
+                    <option value="unrealizedPnL">Trier : performance</option>
+                </select>
             </div>
 
             {filteredPositions.length === 0 ? (
@@ -189,27 +184,27 @@ export default function PositionsView({
                                 </th>
                                 <th onClick={() => handleSort('averageCost')} className="sortable-th text-right">
                                     <div className="th-content justify-end">
-                                        PRU d'achat <ArrowUpDown size={12} />
+                                        PRU <ArrowUpDown size={12} />
                                     </div>
                                 </th>
                                 <th onClick={() => handleSort('costBasis')} className="sortable-th text-right">
                                     <div className="th-content justify-end">
-                                        Investi (€) <ArrowUpDown size={12} />
+                                        Investi <ArrowUpDown size={12} />
                                     </div>
                                 </th>
                                 <th onClick={() => handleSort('currentPrice')} className="sortable-th text-right">
                                     <div className="th-content justify-end">
-                                        Cours actuel <ArrowUpDown size={12} />
+                                        Cours <ArrowUpDown size={12} />
                                     </div>
                                 </th>
                                 <th onClick={() => handleSort('marketValue')} className="sortable-th text-right">
                                     <div className="th-content justify-end">
-                                        Valeur (€) <ArrowUpDown size={12} />
+                                        Valeur <ArrowUpDown size={12} />
                                     </div>
                                 </th>
                                 <th onClick={() => handleSort('unrealizedPnL')} className="sortable-th text-right">
                                     <div className="th-content justify-end">
-                                        Gain / Perte (€) <ArrowUpDown size={12} />
+                                        Gain / Perte <ArrowUpDown size={12} />
                                     </div>
                                 </th>
                                 <th onClick={() => handleSort('allocationWeight')} className="sortable-th text-right">
@@ -222,7 +217,7 @@ export default function PositionsView({
                         </thead>
                         <tbody>
                             {filteredPositions.map((pos) => {
-                                const isPos = pos.unrealizedPnL >= 0
+                                const isPos = pos.unrealizedPnLNative >= 0
                                 const currentDisplayPrice =
                                     pos.ticker in localPrices
                                         ? localPrices[pos.ticker]
@@ -235,33 +230,48 @@ export default function PositionsView({
                                         <td>
                                             <div className="ticker-badge-box">
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                    <span className="ticker-sym">{pos.ticker}</span>
-                                                    {pos.currency === 'USD' && (
+                                                    <span className="ticker-sym">{pos.name || pos.ticker}</span>
+                                                    {pos.currency !== 'EUR' && (
                                                         <span className="badge badge-buy" style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}>
-                                                            USD
+                                                            {pos.currency}
                                                         </span>
                                                     )}
                                                 </div>
-                                                <span className="ticker-name" title={pos.name}>
-                                                    {pos.name || pos.ticker}
-                                                </span>
+                                                <div className="asset-tag-chips">
+                                                    {(Array.isArray(assetMetadata[pos.ticker]?.tags) ? assetMetadata[pos.ticker].tags : String(assetMetadata[pos.ticker]?.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean)).map((tag) => (
+                                                        <span className="asset-tag-chip" key={tag}>{tag}</span>
+                                                    ))}
+                                                </div>
+                                                <details className="tag-picker"><summary>Gérer les étiquettes</summary>
+                                                    {tagCatalog.map((tag) => {
+                                                        const current = assetMetadata[pos.ticker]?.tags || []
+                                                        const selected = Array.isArray(current) ? current : String(current).split(',').map((item) => item.trim())
+                                                        return <label key={tag}><input type="checkbox" checked={selected.includes(tag)} onChange={(e) => onAssetMetadataChange?.(pos.ticker, { tags: e.target.checked ? [...selected, tag] : selected.filter((item) => item !== tag) })} />{tag}</label>
+                                                    })}
+                                                </details>
                                             </div>
                                         </td>
                                         <td className="text-right font-mono font-medium">
                                             {formatQty(pos.quantity)}
                                         </td>
-                                        <td className="text-right font-mono">
-                                            {formatCurrency(pos.averageCost, pos.currency)}
+                                        <td className="text-right font-mono pru-cell" title="Double-cliquez pour modifier le PRU">
+                                            {editingPru?.ticker === pos.ticker ? (
+                                                <input autoFocus className="price-input pru-edit-input" type="number" min="0.000001" step="any" value={editingPru.value} onChange={(e) => setEditingPru({ ...editingPru, value: e.target.value })} onBlur={() => { const value = Number(String(editingPru.value).replace(',', '.')); if (value > 0) onAssetMetadataChange?.(pos.ticker, { pruOverride: value }); setEditingPru(null) }} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setEditingPru(null) }} />
+                                            ) : (
+                                                <button type="button" className="pru-edit-button" onDoubleClick={() => setEditingPru({ ticker: pos.ticker, value: String(pos.averageCost) })} title="Double-cliquez pour modifier le PRU">
+                                                    {formatCurrency(pos.averageCost, pos.currency)}
+                                                </button>
+                                            )}
                                         </td>
                                         <td className="text-right font-mono text-secondary">
-                                            {formatCurrency(pos.costBasis, 'EUR')}
+                                            {formatCurrency(pos.costBasisNative, pos.currency)}
                                         </td>
                                         <td className="text-right">
                                             <div className="price-input-wrapper">
                                                 <input
                                                     className="price-input"
                                                     type="number"
-                                                    min="0"
+                                                    min="0.0001"
                                                     step="any"
                                                     value={currentDisplayPrice}
                                                     onChange={(e) =>
@@ -272,19 +282,19 @@ export default function PositionsView({
                                                         handlePriceKeyDown(e, pos.ticker, pos.currentPrice)
                                                     }
                                                     placeholder="0.00"
-                                                    title={`Modifiez le cours en ${pos.currency === 'USD' ? 'Dollars ($)' : 'Euros (€)'}`}
+                                                    title={`Modifiez le cours en ${pos.currency}`}
                                                 />
                                             </div>
                                         </td>
                                         <td className="text-right font-mono font-bold">
-                                            {formatCurrency(pos.marketValue, 'EUR')}
+                                            {formatCurrency(pos.marketValueNative, pos.currency)}
                                         </td>
                                         <td className="text-right">
                                             <div className={`pnl-badge ${isPos ? 'pos' : 'neg'}`}>
-                                                {formatCurrency(pos.unrealizedPnL, 'EUR')}
+                                                {formatCurrency(pos.unrealizedPnLNative, pos.currency)}
                                             </div>
                                             <div className={`pnl-sub ${isPos ? 'pos' : 'neg'}`}>
-                                                {formatPercent(pos.unrealizedPct, true)}
+                                                {formatPercent(pos.unrealizedPctNative, true)}
                                             </div>
                                         </td>
                                         <td className="text-right">
@@ -312,6 +322,7 @@ export default function PositionsView({
                                                             ticker: pos.ticker,
                                                             name: pos.name,
                                                             currentPrice: pos.currentPrice,
+                                                            currency: pos.currency,
                                                         })
                                                     }
                                                 >
@@ -328,6 +339,7 @@ export default function PositionsView({
                                                             ticker: pos.ticker,
                                                             name: pos.name,
                                                             currentPrice: pos.currentPrice,
+                                                            currency: pos.currency,
                                                         })
                                                     }
                                                 >
