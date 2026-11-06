@@ -74,9 +74,19 @@ export async function getTransactions() {
   if (!supabase) {
     return handleResponse(await fetch(API_BASE))
   }
-  const { data, error } = await supabase.from('transactions').select('*').order('date', { ascending: false })
-  if (error) throwSupabaseError(error)
-  return (data || []).map(fromDatabase)
+  const pageSize = 1000
+  const rows = []
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase.from('transactions')
+      .select('*')
+      .order('date', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, from + pageSize - 1)
+    if (error) throwSupabaseError(error)
+    rows.push(...(data || []))
+    if (!data || data.length < pageSize) break
+  }
+  return rows.map(fromDatabase)
 }
 
 export async function createTransaction(payload) {
