@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ShieldCheck, LogIn, AlertCircle, UserPlus } from 'lucide-react'
+import { ShieldCheck, LogIn, AlertCircle, UserPlus, MailCheck } from 'lucide-react'
 import App from '../App'
 import { supabase, supabaseConfigured } from '../lib/supabase'
 
@@ -8,6 +8,7 @@ export default function AuthGate() {
     const [loading, setLoading] = useState(supabaseConfigured)
     const [signingIn, setSigningIn] = useState(false)
     const [error, setError] = useState('')
+    const [notice, setNotice] = useState('')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [isSignUp, setIsSignUp] = useState(false)
@@ -35,11 +36,18 @@ export default function AuthGate() {
         event.preventDefault()
         setSigningIn(true)
         setError('')
+        setNotice('')
         try {
             if (isSignUp) {
                 const { data, error: signUpError } = await supabase.auth.signUp({ email, password })
                 if (signUpError) throw signUpError
-                if (!data.session) setError('Compte créé. Vérifie tes e-mails pour confirmer ton adresse avant de te connecter.')
+                if (!data.session) {
+                    setNotice(`Un e-mail de confirmation a été envoyé à ${email}. Ouvre-le et clique sur le lien pour activer ton compte, puis reviens ici pour te connecter. Pense à vérifier tes courriers indésirables.`)
+                    setIsSignUp(false)
+                    setPassword('')
+                } else {
+                    setNotice('Ton compte est créé et tu es connecté.')
+                }
             } else {
                 const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
                 if (signInError) throw signInError
@@ -76,17 +84,18 @@ export default function AuthGate() {
                     <h1>Mon portefeuille</h1>
                     <p>Connecte-toi ou crée un compte. Chaque compte dispose de son propre portefeuille.</p>
                     {error && <div className="auth-error"><AlertCircle size={16} />{error}</div>}
+                    {notice && <div className="auth-notice" role="status"><MailCheck size={20} /><span>{notice}</span></div>}
                     <form className="auth-form" onSubmit={submitCredentials}>
                         <label htmlFor="auth-email">Adresse e-mail</label>
-                        <input id="auth-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} />
+                        <input id="auth-email" type="email" autoComplete="email" placeholder="nom@exemple.com" required value={email} onChange={(event) => setEmail(event.target.value)} />
                         <label htmlFor="auth-password">Mot de passe</label>
-                        <input id="auth-password" type="password" autoComplete={isSignUp ? 'new-password' : 'current-password'} minLength={6} required value={password} onChange={(event) => setPassword(event.target.value)} />
+                        <input id="auth-password" type="password" autoComplete={isSignUp ? 'new-password' : 'current-password'} placeholder={isSignUp ? 'Au moins 6 caractères' : 'Ton mot de passe'} minLength={6} required value={password} onChange={(event) => setPassword(event.target.value)} />
                         <button type="submit" className="btn-primary auth-google-button" disabled={signingIn}>
                             {isSignUp ? <UserPlus size={17} /> : <LogIn size={17} />}
                             {signingIn ? 'Patiente…' : isSignUp ? 'Créer mon compte' : 'Se connecter'}
                         </button>
                     </form>
-                    <button type="button" className="auth-mode-toggle" onClick={() => { setIsSignUp((value) => !value); setError('') }}>
+                    <button type="button" className="auth-mode-toggle" onClick={() => { setIsSignUp((value) => !value); setError(''); setNotice('') }}>
                         {isSignUp ? 'J’ai déjà un compte' : 'Créer un compte'}
                     </button>
                 </section>

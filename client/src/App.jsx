@@ -708,13 +708,10 @@ export default function App({ user = null, onSignOut }) {
                         </button>
 
                         {user && (
-                            <>
-                                <span className="signed-in-email" title={user.email}>{user.email}</span>
-                                <button type="button" className="btn-header-action" onClick={onSignOut} title="Se déconnecter">
-                                    <LogOut size={15} />
-                                    <span>Déconnexion</span>
-                                </button>
-                            </>
+                            <button type="button" className="btn-header-action" onClick={onSignOut} title="Se déconnecter">
+                                <LogOut size={15} />
+                                <span>Déconnexion</span>
+                            </button>
                         )}
 
                        

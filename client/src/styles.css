@@ -1561,13 +1561,17 @@ button, input, select, textarea {
 .auth-card h1 { color: var(--text-primary); font-size: 1.35rem; }
 .auth-card p { color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; }
 .auth-google-button { justify-content: center; width: 100%; margin-top: 0.35rem; }
-.auth-form { display: grid; gap: 0.55rem; margin-top: 1rem; }
-.auth-form label { color: var(--text-secondary); font-size: 0.82rem; }
-.auth-form input { width: 100%; padding: 0.7rem 0.8rem; border: 1px solid var(--border-color); border-radius: 0.55rem; background: var(--bg-secondary); color: var(--text-primary); }
+.auth-form { display: grid; width: 100%; gap: 0.55rem; margin-top: 1rem; text-align: left; }
+.auth-form label { margin-top: 0.25rem; color: var(--text-primary); font-size: 0.84rem; font-weight: 600; }
+.auth-form input { display: block; width: 100%; min-height: 48px; padding: 0.75rem 0.85rem; border: 1.5px solid var(--border-default, #64748b); border-radius: 0.65rem; background: var(--bg-app); color: var(--text-primary); font: inherit; font-size: 0.95rem; opacity: 1; }
+.auth-form input::placeholder { color: var(--text-muted); opacity: 1; }
+.auth-form input:focus { border-color: var(--color-accent); outline: 3px solid color-mix(in srgb, var(--color-accent) 22%, transparent); outline-offset: 1px; }
+.auth-form input:-webkit-autofill { -webkit-text-fill-color: var(--text-primary); box-shadow: 0 0 0 1000px var(--bg-app) inset; }
 .auth-mode-toggle { display: block; margin: 0.85rem auto 0; border: 0; background: none; color: var(--text-secondary); cursor: pointer; font: inherit; font-size: 0.85rem; }
 .auth-mode-toggle:hover { color: var(--text-primary); }
 .auth-error { display: flex; align-items: center; gap: 0.5rem; color: var(--color-danger); font-size: 0.82rem; }
-.signed-in-email { max-width: 220px; overflow: hidden; color: var(--text-muted); font-size: 0.76rem; text-overflow: ellipsis; white-space: nowrap; }
+.auth-notice { display: flex; width: 100%; align-items: flex-start; gap: 0.65rem; padding: 0.85rem; border: 1px solid color-mix(in srgb, var(--color-success) 40%, transparent); border-radius: 0.7rem; background: var(--color-success-bg); color: var(--text-primary); font-size: 0.84rem; line-height: 1.5; text-align: left; }
+.auth-notice svg { flex: 0 0 auto; margin-top: 1px; color: var(--color-success); }
 
 @media (max-width: 640px) {
   .nav-tabs { margin-inline: -0.25rem; }
@@ -1576,7 +1580,6 @@ button, input, select, textarea {
   .positions-card .table-toolbar { padding: 0.65rem; }
   .positions-card .search-bar { min-width: 100%; max-width: none; }
   .positions-card .table-toolbar select { flex: 1 1 100%; max-width: none; }
-  .signed-in-email { display: none; }
 }
 
 /* Import, historical rates and income operations */
