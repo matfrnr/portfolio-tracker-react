@@ -105,6 +105,7 @@ export default function TransactionView({
                 name: prefillData.name || '',
                 currency: detectedCurr,
                 exchangeRate: detectedCurr === 'EUR' || hasExchangeRate(detectedCurr, forexRates) ? String(prefillRate) : '',
+                quantity: prefillData.type === 'SELL' && Number(prefillData.quantity) > 0 ? String(prefillData.quantity) : '',
                 unitPrice: prefillData.currentPrice ? String(prefillData.currentPrice) : '',
                 currentPrice: prefillData.currentPrice ? String(prefillData.currentPrice) : '',
                 date: getTodayISODate(),
@@ -115,7 +116,7 @@ export default function TransactionView({
                 date: getTodayISODate(),
             })
         }
-    }, [editingTransaction?.id, prefillData?.ticker, prefillData?.type])
+    }, [editingTransaction?.id, prefillData?.ticker, prefillData?.type, prefillData?.quantity])
 
     // Fermer les suggestions lors d'un clic extérieur
     useEffect(() => {
@@ -194,6 +195,7 @@ export default function TransactionView({
             type,
             ticker: selected?.ticker || '',
             name: selected?.name || '',
+            quantity: selected ? String(getAvailableQuantity(transactions, selected.ticker, editingTransaction?.id)) : current.quantity,
             currency,
             exchangeRate: currency === 'EUR' || hasExchangeRate(currency, forexRates)
                 ? String(exchangeRateFor(currency, forexRates, forexRate))
@@ -210,6 +212,7 @@ export default function TransactionView({
             ...current,
             ticker: selected.ticker,
             name: selected.name,
+            quantity: form.type === 'SELL' ? String(getAvailableQuantity(transactions, selected.ticker, editingTransaction?.id)) : current.quantity,
             currency,
             exchangeRate: currency === 'EUR' || hasExchangeRate(currency, forexRates)
                 ? String(exchangeRateFor(currency, forexRates, forexRate))
@@ -512,7 +515,7 @@ export default function TransactionView({
                     </div>
 
                     {/* Cours actuel */}
-                    {form.type !== 'DIVIDEND' && <div className="form-field">
+                    {form.type === 'BUY' && <div className="form-field">
                         <label>Cours actuel du marché ({currencySymbol})</label>
                         <input
                             type="number"

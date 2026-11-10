@@ -341,6 +341,7 @@ export default function PositionsView({
                                                             name: pos.name,
                                                             currentPrice: pos.currentPrice,
                                                             currency: pos.currency,
+                                                            quantity: pos.quantity,
                                                         })
                                                     }
                                                 >

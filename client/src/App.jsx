@@ -525,6 +525,7 @@ export default function App({ user = null, onSignOut }) {
             name: data.name,
             currentPrice: data.currentPrice,
             currency: data.currency,
+            quantity: type === 'SELL' ? data.quantity : undefined,
         })
         setCurrentTab('transaction')
     }

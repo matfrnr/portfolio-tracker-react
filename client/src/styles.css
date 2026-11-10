@@ -1572,6 +1572,9 @@ button, input, select, textarea {
 .auth-error { display: flex; align-items: center; gap: 0.5rem; color: var(--color-danger); font-size: 0.82rem; }
 .auth-notice { display: flex; width: 100%; align-items: flex-start; gap: 0.65rem; padding: 0.85rem; border: 1px solid color-mix(in srgb, var(--color-success) 40%, transparent); border-radius: 0.7rem; background: var(--color-success-bg); color: var(--text-primary); font-size: 0.84rem; line-height: 1.5; text-align: left; }
 .auth-notice svg { flex: 0 0 auto; margin-top: 1px; color: var(--color-success); }
+.history-realized-pnl { display: block; margin-top: 0.25rem; font-size: 0.78rem; font-weight: 650; }
+.history-realized-pnl.positive { color: var(--color-success); }
+.history-realized-pnl.negative { color: var(--color-danger); }
 
 @media (max-width: 640px) {
   .nav-tabs { margin-inline: -0.25rem; }

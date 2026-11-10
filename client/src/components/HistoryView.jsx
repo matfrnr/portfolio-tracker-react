@@ -6,6 +6,7 @@ import {
     transactionRate,
     defaultCurrencyForTicker,
     formatAssetName,
+    realizedPnLByTransaction,
 } from '../lib/portfolio'
 import {
     Search,
@@ -22,6 +23,7 @@ export default function HistoryView({ transactions = [], onDelete, onEdit, forex
     const [historyTab, setHistoryTab] = useState('ALL')
     const [searchQuery, setSearchQuery] = useState('')
     const [deleteCandidate, setDeleteCandidate] = useState(null)
+    const realizedGains = useMemo(() => realizedPnLByTransaction(transactions, forexRates || forexRate), [transactions, forexRates, forexRate])
 
     // Filtrage dynamique
     const filteredTransactions = useMemo(() => {
@@ -240,6 +242,11 @@ export default function HistoryView({ transactions = [], onDelete, onEdit, forex
                                                 </span>
                                             )}
                                         </span>
+                                        {isSell && realizedGains.has(tx.id) && (
+                                            <span className={`history-realized-pnl ${realizedGains.get(tx.id) >= 0 ? 'positive' : 'negative'}`}>
+                                                {realizedGains.get(tx.id) >= 0 ? 'PV réalisée' : 'MV réalisée'} · {formatCurrency(Math.abs(realizedGains.get(tx.id)), 'EUR')}
+                                            </span>
+                                        )}
                                     </div>
 
                                     <div className="history-actions">

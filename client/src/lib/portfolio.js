@@ -164,6 +164,38 @@ function sortTransactionsByDate(transactions) {
         .map(({ transaction }) => transaction)
 }
 
+export function realizedPnLByTransaction(transactions, currentRates = 1.085) {
+    const holdings = new Map()
+    const gains = new Map()
+    for (const tx of sortTransactionsByDate(transactions)) {
+        if (tx.type === 'DIVIDEND') continue
+        const ticker = normalizeTicker(tx.ticker)
+        const quantity = parseNumber(tx.quantity, 0)
+        const price = parseNumber(tx.unitPrice, 0)
+        const fees = parseNumber(tx.fees, 0)
+        const rate = transactionRate(tx, currentRates)
+        const holding = holdings.get(ticker) || { quantity: 0, costEUR: 0 }
+        if (tx.type === 'BUY') {
+            holding.quantity += quantity
+            holding.costEUR += (quantity * price + fees) / rate
+        } else if (tx.type === 'SELL') {
+            const matched = Math.min(quantity, holding.quantity)
+            const ratio = quantity > 0 ? matched / quantity : 0
+            const proceedsEUR = ((quantity * price - fees) * ratio) / rate
+            const costEUR = holding.quantity > 0 ? (holding.costEUR / holding.quantity) * matched : 0
+            gains.set(tx.id, proceedsEUR - costEUR)
+            holding.quantity = Math.max(0, holding.quantity - matched)
+            holding.costEUR = Math.max(0, holding.costEUR - costEUR)
+        }
+        if (holding.quantity < 1e-8) {
+            holding.quantity = 0
+            holding.costEUR = 0
+        }
+        holdings.set(ticker, holding)
+    }
+    return gains
+}
+
 export function getAvailableQuantity(transactions, ticker, excludeTxId = null) {
     const symbol = normalizeTicker(ticker)
     if (!symbol) return 0
