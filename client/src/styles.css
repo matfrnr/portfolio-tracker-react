@@ -431,6 +431,20 @@ button, input, select, textarea {
   grid-column: 1 / -1;
 }
 
+.portfolio-navigation-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+.portfolio-navigation-row .nav-tabs { flex: 1 1 auto; min-width: 0; margin: 0; }
+.portfolio-scope-control { display: flex; flex: 0 0 auto; align-items: center; gap: 0.55rem; color: var(--text-secondary); font-size: 0.82rem; white-space: nowrap; }
+.portfolio-scope-control select { min-height: 36px; padding: 0.35rem 0.65rem; border: 1px solid var(--border-default); border-radius: 0.55rem; background: var(--surface-card); color: var(--text-primary); }
+.asset-classification-editor { margin-top: 0.3rem; font-size: 0.72rem; }
+.asset-classification-editor summary { color: var(--text-muted); cursor: pointer; }
+.asset-classification-editor label { display: grid; gap: 0.25rem; margin-top: 0.5rem; color: var(--text-secondary); }
+.asset-classification-editor input, .asset-classification-editor select { width: 100%; min-height: 30px; padding: 0.3rem 0.4rem; border: 1px solid var(--border-default); border-radius: 0.35rem; background: var(--surface-card); color: var(--text-primary); }
+
+@media (max-width: 820px) {
+  .portfolio-navigation-row { align-items: stretch; flex-direction: column; gap: 0.55rem; }
+  .portfolio-scope-control { justify-content: flex-end; }
+}
+
 .card-header-flex {
   display: flex;
   justify-content: space-between;

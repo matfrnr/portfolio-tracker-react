@@ -98,7 +98,7 @@ function AssetAxisTick({ x, y, payload, data }) {
     )
 }
 
-export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.085 }, assetMetadata = {} }) {
+export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.085 }, assetMetadata = {}, transactions = [] }) {
     const [dividendRates, setDividendRates] = useState({})
     const [allocationMode, setAllocationMode] = useState('asset')
     const { positions, invested, currentValue, unrealizedPnL, realizedPnL, dividendsNet, dataIssues, dataWarnings, topPerformer, worstPerformer } =
@@ -109,11 +109,13 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
         for (const position of positions) {
             const classification = ASSET_CLASSIFICATION[position.ticker] || {}
             const metadata = assetMetadata[position.ticker] || {}
+            const sector = String(metadata.sector || '').trim()
+            const country = String(metadata.country || '').trim()
             const label = allocationMode === 'asset'
                 ? formatAssetName(position.name, position.ticker)
                 : allocationMode === 'sector'
-                    ? (metadata.sector || classification.sector || 'À classer')
-                    : (metadata.country || classification.country || 'À classer')
+                    ? (sector || classification.sector || 'À classer')
+                    : (country || classification.country || 'À classer')
             const existing = groups.get(label) || { label, marketValue: 0, tickers: [], companies: [], color: PALETTE[groups.size % PALETTE.length] }
             existing.marketValue += Number(position.marketValue) || 0
             existing.tickers.push(position.ticker)

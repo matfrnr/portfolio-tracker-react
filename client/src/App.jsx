@@ -5,7 +5,7 @@ import DashboardView from './components/DashboardView'
 import PositionsView from './components/PositionsView'
 import TransactionView from './components/TransactionView'
 import HistoryView from './components/HistoryView'
-import { computePortfolio, validateTransaction, validateTransactionHistory, uid, parseNumber, formatCurrency, formatDateFR, formatQty, defaultCurrencyForTicker } from './lib/portfolio'
+import { computePortfolio, validateTransaction, validateTransactionHistory, uid, parseNumber, formatCurrency, formatDateFR, formatQty, defaultCurrencyForTicker, isCryptoTicker } from './lib/portfolio'
 import { exportPortfolioJSON, importPortfolioJSON } from './lib/storage'
 import { parsePortfolioCSV, downloadPortfolioCSVTemplate } from './lib/portfolioCsv'
 import { getPortfolioSettings, savePortfolioSettings } from './api/settings'
@@ -38,6 +38,7 @@ const STORAGE_KEYS = {
     pendingSync: 'portfolio-tracker:pending-sync',
     assetMetadata: 'portfolio-tracker:asset-metadata',
     tagCatalog: 'portfolio-tracker:tag-catalog',
+    scope: 'portfolio-tracker:scope',
 }
 
 const EMPTY_SNAPSHOT = {
@@ -64,6 +65,9 @@ const EMPTY_SNAPSHOT = {
 export default function App({ user = null, onSignOut }) {
     const storageKey = (key) => user?.id ? `${STORAGE_KEYS[key]}:${user.id}` : STORAGE_KEYS[key]
     const [currentTab, setCurrentTab] = useState('dashboard')
+    const [portfolioScope, setPortfolioScope] = useState(() => {
+        try { return localStorage.getItem(storageKey('scope')) || 'stocks' } catch { return 'stocks' }
+    })
     const [settingsReady, setSettingsReady] = useState(!user)
     const importFileInput = useRef(null)
 
@@ -120,6 +124,10 @@ export default function App({ user = null, onSignOut }) {
     const [importPreview, setImportPreview] = useState(null)
     const [importMode, setImportMode] = useState('append')
     const [importError, setImportError] = useState('')
+
+    useEffect(() => {
+        try { localStorage.setItem(storageKey('scope'), portfolioScope) } catch {}
+    }, [portfolioScope, user?.id])
 
     // Sauvegarde continue dans le localStorage en double sécurité
     useEffect(() => {
@@ -334,10 +342,15 @@ export default function App({ user = null, onSignOut }) {
         loadData()
     }, [refreshQuotesForTickers, showToast, user?.id])
 
-    // Calcul du portefeuille (tout consolidé en EUR)
+    const scopedTransactions = useMemo(() => transactions.filter((tx) => {
+        const type = assetMetadata[tx.ticker]?.portfolioType || (isCryptoTicker(tx.ticker, tx.name) ? 'crypto' : 'stocks')
+        return portfolioScope === 'all' || type === portfolioScope
+    }), [transactions, assetMetadata, portfolioScope])
+
+    // Calcul du portefeuille pour le périmètre sélectionné.
     const snapshot = useMemo(() => {
         try {
-            const base = computePortfolio(transactions, prices, currencies, forexRates)
+            const base = computePortfolio(scopedTransactions, prices, currencies, forexRates)
             const positions = base.positions.map((position) => {
                 const override = Number(assetMetadata[position.ticker]?.pruOverride)
                 if (!(override > 0) || Math.abs(override - position.averageCost) < 1e-9) return position
@@ -356,10 +369,10 @@ export default function App({ user = null, onSignOut }) {
             console.error('Erreur calcul portefeuille:', err)
             return {
                 ...EMPTY_SNAPSHOT,
-                transactionCount: transactions.length,
+                transactionCount: scopedTransactions.length,
             }
         }
-    }, [transactions, prices, currencies, forexRates, assetMetadata])
+    }, [scopedTransactions, prices, currencies, forexRates, assetMetadata])
 
     const importHistoryIssues = useMemo(() => {
         if (!importPreview) return []
@@ -742,11 +755,21 @@ export default function App({ user = null, onSignOut }) {
             {/* Corps de l'application */}
             <main className="main-content">
                 {/* Navigation par Onglets */}
-                <Tabs
-                    currentTab={currentTab}
-                    onChange={setCurrentTab}
-                    positionsCount={snapshot.positions.length}
-                />
+                <div className="portfolio-navigation-row">
+                    <Tabs
+                        currentTab={currentTab}
+                        onChange={setCurrentTab}
+                        positionsCount={snapshot.positions.length}
+                    />
+                    <div className="portfolio-scope-control">
+                        <label htmlFor="portfolio-scope">Portefeuille</label>
+                        <select id="portfolio-scope" value={portfolioScope} onChange={(event) => setPortfolioScope(event.target.value)}>
+                            <option value="stocks">Bourse</option>
+                            <option value="crypto">Cryptomonnaies</option>
+                            <option value="all">Tout</option>
+                        </select>
+                    </div>
+                </div>
 
                 {loading ? (
                     <div className="card loading-card">
@@ -758,7 +781,7 @@ export default function App({ user = null, onSignOut }) {
                         {/* Vue 1 : Tableau de bord */}
                         <div className={currentTab === 'dashboard' ? 'tab-view active' : 'tab-view'}>
                             <KpiRow snapshot={snapshot} />
-                            <DashboardView snapshot={snapshot} forexRates={forexRates} assetMetadata={assetMetadata} />
+                            <DashboardView snapshot={snapshot} forexRates={forexRates} assetMetadata={assetMetadata} transactions={scopedTransactions} />
                         </div>
 
                         {/* Vue 2 : Positions */}
@@ -786,7 +809,7 @@ export default function App({ user = null, onSignOut }) {
                                 editingTransaction={editingTransaction}
                                 onCancelEdit={handleCancelEdit}
                                 prefillData={prefillData}
-                                transactions={transactions}
+                                transactions={scopedTransactions}
                                 positions={snapshot.positions}
                                 currencies={currencies}
                                 currentPrice={
@@ -802,7 +825,7 @@ export default function App({ user = null, onSignOut }) {
                         {/* Vue 4 : Historique */}
                         <div className={currentTab === 'history' ? 'tab-view active' : 'tab-view'}>
                             <HistoryView
-                                transactions={transactions}
+                                transactions={scopedTransactions}
                                 onDelete={handleDeleteTransaction}
                                 onEdit={handleEditTransaction}
                                 forexRate={forexRate}

@@ -1,5 +1,13 @@
 const EPSILON = 1e-6
 
+export function isCryptoTicker(ticker, name = '') {
+    const symbol = String(ticker || '').toUpperCase()
+    const label = String(name || '').toLowerCase()
+    return /^(BTC|ETH|SOL|XRP|ADA|DOGE|LTC|DOT|AVAX|LINK|BCH|BNB|USDT|USDC)(-(USD|EUR|GBP|BTC|USDT|USDC))?$/.test(symbol)
+        || /-(USD|EUR|USDT|USDC)$/.test(symbol)
+        || /bitcoin|ethereum|cryptocurrency|crypto-monnaie|cryptomonnaie/.test(label)
+}
+
 const SHORT_ASSET_NAMES = {
     '2FE.DU': 'Ferrari',
     '3V64.DE': 'Visa',
@@ -147,7 +155,7 @@ export function transactionRate(transaction, currentRates = 1.085) {
     return exchangeRateFor(currency, currentRates)
 }
 
-function sortTransactionsByDate(transactions) {
+export function sortTransactionsByDate(transactions) {
     return [...transactions]
         .map((transaction, index) => ({ transaction, index }))
         .sort((a, b) => {

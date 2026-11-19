@@ -16,6 +16,7 @@ import {
     SlidersHorizontal,
     Sparkles,
 } from 'lucide-react'
+import { isCryptoTicker } from '../lib/portfolio'
 
 export default function PositionsView({
     positions = [],
@@ -249,6 +250,21 @@ export default function PositionsView({
                                                         const selected = Array.isArray(current) ? current : String(current).split(',').map((item) => item.trim())
                                                         return <label key={tag}><input type="checkbox" checked={selected.includes(tag)} onChange={(e) => onAssetMetadataChange?.(pos.ticker, { tags: e.target.checked ? [...selected, tag] : selected.filter((item) => item !== tag) })} />{tag}</label>
                                                     })}
+                                                </details>
+                                                <details className="asset-classification-editor">
+                                                    <summary>Secteur, pays et catégorie</summary>
+                                                    <label>Type de portefeuille
+                                                        <select value={assetMetadata[pos.ticker]?.portfolioType || (isCryptoTicker(pos.ticker, pos.name) ? 'crypto' : 'stocks')} onChange={(event) => onAssetMetadataChange?.(pos.ticker, { portfolioType: event.target.value })}>
+                                                            <option value="stocks">Bourse</option>
+                                                            <option value="crypto">Crypto</option>
+                                                        </select>
+                                                    </label>
+                                                    <label>Secteur
+                                                        <input type="text" value={assetMetadata[pos.ticker]?.sector || ''} placeholder="Automatique si vide" onChange={(event) => onAssetMetadataChange?.(pos.ticker, { sector: event.target.value })} />
+                                                    </label>
+                                                    <label>Pays
+                                                        <input type="text" value={assetMetadata[pos.ticker]?.country || ''} placeholder="Automatique si vide" onChange={(event) => onAssetMetadataChange?.(pos.ticker, { country: event.target.value })} />
+                                                    </label>
                                                 </details>
                                             </div>
                                         </td>
