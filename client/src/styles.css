@@ -197,6 +197,20 @@ button, input, select, textarea {
   border-color: var(--border-default);
 }
 
+.profile-menu { position: relative; }
+.profile-menu-trigger { min-height: 36px; }
+.profile-chevron { transition: transform 0.15s ease; }
+.profile-chevron.open { transform: rotate(180deg); }
+.profile-menu-popover { position: absolute; top: calc(100% + 0.55rem); right: 0; z-index: 60; display: grid; min-width: 205px; padding: 0.4rem; border: 1px solid var(--border-subtle); border-radius: 0.75rem; background: var(--surface-card); box-shadow: var(--shadow-lg); }
+.profile-menu-popover > button { display: flex; align-items: center; gap: 0.65rem; width: 100%; padding: 0.65rem 0.7rem; border: 0; border-radius: 0.5rem; background: transparent; color: var(--text-primary); font: inherit; font-size: 0.86rem; text-align: left; cursor: pointer; }
+.profile-menu-popover > button:hover { background: var(--surface-hover); }
+.profile-menu-popover > button svg { color: var(--text-secondary); }
+.profile-menu-popover > button.profile-signout { color: var(--color-danger); }
+.profile-menu-popover > button.profile-signout svg { color: var(--color-danger); }
+.profile-menu-divider { height: 1px; margin: 0.35rem 0; background: var(--border-subtle); }
+.profile-sync-status { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.55rem 0.65rem; color: var(--color-danger); font-size: 0.76rem; line-height: 1.35; }
+.profile-sync-status svg { flex: 0 0 auto; }
+
 .import-label {
   cursor: pointer;
 }

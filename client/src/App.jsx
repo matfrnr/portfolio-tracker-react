@@ -28,6 +28,8 @@ import {
     Briefcase,
     FileSpreadsheet,
     LogOut,
+    UserRound,
+    ChevronDown,
 } from 'lucide-react'
 
 const STORAGE_KEYS = {
@@ -70,6 +72,8 @@ export default function App({ user = null, onSignOut }) {
     })
     const [settingsReady, setSettingsReady] = useState(!user)
     const importFileInput = useRef(null)
+    const profileMenuRef = useRef(null)
+    const [profileMenuOpen, setProfileMenuOpen] = useState(false)
 
     // Initialisation immédiate depuis le stockage local (cache de secours permanent)
     const [transactions, setTransactions] = useState(() => {
@@ -128,6 +132,22 @@ export default function App({ user = null, onSignOut }) {
     useEffect(() => {
         try { localStorage.setItem(storageKey('scope'), portfolioScope) } catch {}
     }, [portfolioScope, user?.id])
+
+    useEffect(() => {
+        if (!profileMenuOpen) return undefined
+        function closeOnOutsideClick(event) {
+            if (!profileMenuRef.current?.contains(event.target)) setProfileMenuOpen(false)
+        }
+        function closeOnEscape(event) {
+            if (event.key === 'Escape') setProfileMenuOpen(false)
+        }
+        document.addEventListener('mousedown', closeOnOutsideClick)
+        document.addEventListener('keydown', closeOnEscape)
+        return () => {
+            document.removeEventListener('mousedown', closeOnOutsideClick)
+            document.removeEventListener('keydown', closeOnEscape)
+        }
+    }, [profileMenuOpen])
 
     // Sauvegarde continue dans le localStorage en double sécurité
     useEffect(() => {
@@ -687,13 +707,6 @@ export default function App({ user = null, onSignOut }) {
                     </div>
 
                     <div className="header-controls">
-                        {(isOffline || pendingSync.length > 0) && (
-                            <span className="badge badge-sell" title="Le serveur API est inaccessible. Vos données restent conservées en local.">
-                                {isOffline ? <WifiOff size={13} /> : <AlertCircle size={13} />}
-                                {isOffline ? 'Mode local' : 'Synchronisation en attente'}{pendingSync.length ? ` · ${pendingSync.length}` : ''}
-                            </span>
-                        )}
-
                         <button
                             type="button"
                             className="btn-header-action"
@@ -705,28 +718,36 @@ export default function App({ user = null, onSignOut }) {
                             <span>{isRefreshing ? 'Actualisation...' : 'Actualiser les cours'}</span>
                         </button>
 
-                        <button
-                            type="button"
-                            className="btn-header-action"
-                            onClick={handleExport}
-                            title="Sauvegarder votre portefeuille au format JSON"
-                        >
-                            <Download size={15} />
-                            <span>Exporter</span>
-                        </button>
-
-                        <input ref={importFileInput} type="file" accept=".json,.csv,text/csv,application/json" onChange={handleImport} hidden />
-                        <button type="button" className="btn-header-action" onClick={() => importFileInput.current?.click()} title="Importer un portefeuille JSON ou CSV">
-                            <Upload size={15} />
-                            <span>Importer</span>
-                        </button>
-
-                        {user && (
-                            <button type="button" className="btn-header-action" onClick={onSignOut} title="Se déconnecter">
-                                <LogOut size={15} />
-                                <span>Déconnexion</span>
+                        <div className="profile-menu" ref={profileMenuRef}>
+                            <button type="button" className="btn-header-action profile-menu-trigger" aria-haspopup="menu" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)}>
+                                <UserRound size={16} />
+                                <span>Profil</span>
+                                <ChevronDown size={14} className={profileMenuOpen ? 'profile-chevron open' : 'profile-chevron'} />
                             </button>
-                        )}
+                            <input ref={importFileInput} type="file" accept=".json,.csv,text/csv,application/json" onChange={(event) => { setProfileMenuOpen(false); handleImport(event) }} hidden />
+                            {profileMenuOpen && (
+                                <div className="profile-menu-popover" role="menu">
+                                    {(isOffline || pendingSync.length > 0) && (
+                                        <div className="profile-sync-status">
+                                            {isOffline ? <WifiOff size={14} /> : <AlertCircle size={14} />}
+                                            <span>{isOffline ? 'Mode local' : 'Synchronisation en attente'}{pendingSync.length ? ` · ${pendingSync.length}` : ''}</span>
+                                        </div>
+                                    )}
+                                    <button type="button" role="menuitem" onClick={() => { setProfileMenuOpen(false); importFileInput.current?.click() }}>
+                                        <Upload size={16} /><span>Importer</span>
+                                    </button>
+                                    <button type="button" role="menuitem" onClick={() => { setProfileMenuOpen(false); handleExport() }}>
+                                        <Download size={16} /><span>Exporter</span>
+                                    </button>
+                                    {user && <>
+                                        <div className="profile-menu-divider" />
+                                        <button type="button" role="menuitem" className="profile-signout" onClick={() => { setProfileMenuOpen(false); onSignOut?.() }}>
+                                            <LogOut size={16} /><span>Déconnexion</span>
+                                        </button>
+                                    </>}
+                                </div>
+                            )}
+                        </div>
 
                        
                     </div>
