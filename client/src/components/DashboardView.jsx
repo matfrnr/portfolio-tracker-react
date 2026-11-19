@@ -10,8 +10,9 @@ import {
     CartesianGrid,
     ReferenceLine,
 } from 'recharts'
-import { formatCurrency, formatPercent, formatAssetName, exchangeRateFor } from '../lib/portfolio'
+import { formatCurrency, formatPercent, formatAssetName, exchangeRateFor, isCryptoTicker } from '../lib/portfolio'
 import { fetchDividends } from '../api/prices'
+import PerformanceHistory from './PerformanceHistory'
 import {
     PieChart as PieIcon,
     BarChart3,
@@ -98,24 +99,31 @@ function AssetAxisTick({ x, y, payload, data }) {
     )
 }
 
-export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.085 }, assetMetadata = {}, transactions = [] }) {
+export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.085 }, assetMetadata = {}, portfolioScope = 'stocks', performanceSaveError = null }) {
     const [dividendRates, setDividendRates] = useState({})
     const [allocationMode, setAllocationMode] = useState('asset')
     const { positions, invested, currentValue, unrealizedPnL, realizedPnL, dividendsNet, dataIssues, dataWarnings, topPerformer, worstPerformer } =
         snapshot
+    const visibleAllocationMode = portfolioScope === 'crypto' ? 'asset' : allocationMode
+    const dividendPositions = useMemo(() => positions.filter((position) => {
+        const type = assetMetadata[position.ticker]?.portfolioType || (isCryptoTicker(position.ticker, position.name) ? 'crypto' : 'stocks')
+        return type !== 'crypto'
+    }), [positions, assetMetadata])
+    const showDividendSummary = portfolioScope !== 'crypto' && (portfolioScope === 'stocks' || dividendPositions.length > 0)
 
     const allocationData = useMemo(() => {
         const groups = new Map()
         for (const position of positions) {
             const classification = ASSET_CLASSIFICATION[position.ticker] || {}
             const metadata = assetMetadata[position.ticker] || {}
+            const isCrypto = metadata.portfolioType === 'crypto' || (!metadata.portfolioType && isCryptoTicker(position.ticker, position.name))
             const sector = String(metadata.sector || '').trim()
             const country = String(metadata.country || '').trim()
-            const label = allocationMode === 'asset'
+            const label = visibleAllocationMode === 'asset'
                 ? formatAssetName(position.name, position.ticker)
-                : allocationMode === 'sector'
-                    ? (sector || classification.sector || 'À classer')
-                    : (country || classification.country || 'À classer')
+                : visibleAllocationMode === 'sector'
+                    ? (isCrypto ? 'Cryptomonnaies' : sector || classification.sector || 'À classer')
+                    : (isCrypto ? 'Non applicable' : country || classification.country || 'À classer')
             const existing = groups.get(label) || { label, marketValue: 0, tickers: [], companies: [], color: PALETTE[groups.size % PALETTE.length] }
             existing.marketValue += Number(position.marketValue) || 0
             existing.tickers.push(position.ticker)
@@ -126,7 +134,7 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
         return [...groups.values()]
             .map((item) => ({ ...item, weight: total > 0 ? item.marketValue / total * 100 : 0 }))
             .sort((a, b) => b.marketValue - a.marketValue)
-    }, [positions, allocationMode, assetMetadata])
+    }, [positions, visibleAllocationMode, assetMetadata])
 
     const pnlData = useMemo(() => {
         return [...positions]
@@ -146,16 +154,16 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
 
     useEffect(() => {
         let active = true
-        const symbols = positions.map((position) => position.ticker)
+        const symbols = dividendPositions.map((position) => position.ticker)
         fetchDividends(symbols).then((rates) => {
             if (active) setDividendRates(rates || {})
         }).catch(() => {
             if (active) setDividendRates({})
         })
         return () => { active = false }
-    }, [positions.map((position) => position.ticker).join(',')])
+    }, [dividendPositions.map((position) => position.ticker).join(',')])
 
-    const dividendForecast = useMemo(() => positions.map((position) => {
+    const dividendForecast = useMemo(() => dividendPositions.map((position) => {
         const rate = dividendRates[position.ticker]
         if (!rate) return { ...position, unavailable: true, amountEUR: 0 }
         const amountNative = Number(rate.dividendPerShare || 0) * Number(position.quantity || 0)
@@ -168,13 +176,14 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
             amountEUR: amountNative / exchangeRateFor(currency, forexRates),
             unavailable: false,
         }
-    }).sort((a, b) => b.amountEUR - a.amountEUR), [positions, dividendRates, forexRates])
+    }).sort((a, b) => b.amountEUR - a.amountEUR), [dividendPositions, dividendRates, forexRates])
     const dividendTotal = dividendForecast.reduce((sum, item) => sum + item.amountEUR, 0)
     const maxDividend = Math.max(...dividendForecast.map((item) => item.amountEUR), 0)
 
     return (
         <div className="dashboard-grid">
-            <div className="card dashboard-card full-span dividend-forecast-card">
+            <PerformanceHistory scope={portfolioScope} snapshot={snapshot} saveError={performanceSaveError} />
+            {showDividendSummary && <div className="card dashboard-card full-span dividend-forecast-card">
                 <div className="card-header-flex">
                     <div>
                         <h3 className="card-title"><Coins size={16} /> Dividendes · référence annuelle</h3>
@@ -195,7 +204,7 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
                         ))}
                     </div>
                 )}
-            </div>
+            </div>}
             {dataIssues?.length > 0 && (
                 <div className="data-issues-banner full-span">
                     <AlertCircle size={18} />
@@ -218,10 +227,10 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
             <div className="card dashboard-card full-span">
                 <div className="card-header-flex">
                     <div>
-                        <h3 className="card-title"><PieIcon size={16} /> Répartition du portefeuille</h3>
+                        <h3 className="card-title"><PieIcon size={16} /> {portfolioScope === 'crypto' ? 'Répartition des cryptomonnaies' : 'Répartition du portefeuille'}</h3>
                         <p className="card-subtitle">Exposition calculée selon la valeur actuelle des positions</p>
                     </div>
-                    <div className="allocation-switch" role="tablist" aria-label="Type de répartition">
+                    {portfolioScope !== 'crypto' && <div className="allocation-switch" role="tablist" aria-label="Type de répartition">
                         {[
                             ['asset', 'Par titre'],
                             ['sector', 'Par secteur'],
@@ -229,7 +238,7 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
                         ].map(([mode, label]) => (
                             <button key={mode} type="button" role="tab" aria-selected={allocationMode === mode} className={allocationMode === mode ? 'active' : ''} onClick={() => setAllocationMode(mode)}>{label}</button>
                         ))}
-                    </div>
+                    </div>}
                 </div>
 
                 {positions.length === 0 ? (
@@ -240,16 +249,16 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
                     <>
                         <div className="allocation-list">
                             {allocationData.map((item) => (
-                                <div className="allocation-row" key={item.label} title={allocationMode === 'asset' ? item.label : item.companies.join(', ')}>
+                                <div className="allocation-row" key={item.label} title={visibleAllocationMode === 'asset' ? item.label : item.companies.join(', ')}>
                                     <span className="allocation-dot" style={{ backgroundColor: item.color }} />
-                                    <div className="allocation-label-wrap"><span className="allocation-label">{item.label}</span><small className="allocation-tickers">{allocationMode === 'asset' ? item.tickers.join(', ') : `${item.tickers.length} titre${item.tickers.length > 1 ? 's' : ''}`}</small></div>
+                                    <div className="allocation-label-wrap"><span className="allocation-label">{item.label}</span><small className="allocation-tickers">{visibleAllocationMode === 'asset' ? item.tickers.join(', ') : `${item.tickers.length} titre${item.tickers.length > 1 ? 's' : ''}`}</small></div>
                                     <div className="allocation-track"><span style={{ width: `${Math.max(item.weight, item.weight > 0 ? 1 : 0)}%`, backgroundColor: item.color }} /></div>
                                     <strong className="allocation-percent">{formatPercent(item.weight)}</strong>
                                     <span className="allocation-value">{formatCurrency(item.marketValue, 'EUR')}</span>
                                 </div>
                             ))}
                         </div>
-                        {allocationMode !== 'asset' && allocationData.some((item) => item.label === 'À classer') && (
+                        {visibleAllocationMode !== 'asset' && allocationData.some((item) => item.label === 'À classer') && (
                             <p className="allocation-note">Certains titres n’ont pas encore de secteur ou de pays associé.</p>
                         )}
                     </>
@@ -353,7 +362,7 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
                         </div>
                     </div>
 
-                    <div className="summary-stat-box">
+                    {showDividendSummary && <div className="summary-stat-box">
                         <div className="stat-icon-wrapper green">
                             <Coins size={20} />
                         </div>
@@ -364,7 +373,7 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
                             </div>
                             <span className="stat-desc">Après retenues et frais</span>
                         </div>
-                    </div>
+                    </div>}
 
                     <div className="summary-stat-box">
                         <div className="stat-icon-wrapper amber">

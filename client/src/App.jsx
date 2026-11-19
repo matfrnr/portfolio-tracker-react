@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import Tabs from './components/Tabs'
 import KpiRow from './components/KpiRow'
 import DashboardView from './components/DashboardView'
+import { savePerformanceSnapshot } from './api/snapshots'
 import PositionsView from './components/PositionsView'
 import TransactionView from './components/TransactionView'
 import HistoryView from './components/HistoryView'
@@ -128,6 +129,7 @@ export default function App({ user = null, onSignOut }) {
     const [importPreview, setImportPreview] = useState(null)
     const [importMode, setImportMode] = useState('append')
     const [importError, setImportError] = useState('')
+    const [snapshotSaveError, setSnapshotSaveError] = useState('')
 
     useEffect(() => {
         try { localStorage.setItem(storageKey('scope'), portfolioScope) } catch {}
@@ -393,6 +395,20 @@ export default function App({ user = null, onSignOut }) {
             }
         }
     }, [scopedTransactions, prices, currencies, forexRates, assetMetadata])
+
+    // Conserve le dernier état constaté de chaque journée pour le périmètre affiché.
+    useEffect(() => {
+        if (loading || isOffline || isRefreshing || !settingsReady || snapshot.transactionCount <= 0) return undefined
+        const timeout = setTimeout(() => {
+            savePerformanceSnapshot(portfolioScope, snapshot).then(() => {
+                setSnapshotSaveError('')
+            }).catch((error) => {
+                console.warn('Impossible de sauvegarder le relevé de performance :', error)
+                setSnapshotSaveError(error?.message || 'Erreur de synchronisation')
+            })
+        }, 800)
+        return () => clearTimeout(timeout)
+    }, [loading, isOffline, isRefreshing, settingsReady, portfolioScope, snapshot.transactionCount, snapshot.currentValue, snapshot.invested, snapshot.realizedPnL, snapshot.unrealizedPnL, snapshot.dividendsNet, snapshot.totalPnL])
 
     const importHistoryIssues = useMemo(() => {
         if (!importPreview) return []
@@ -802,7 +818,7 @@ export default function App({ user = null, onSignOut }) {
                         {/* Vue 1 : Tableau de bord */}
                         <div className={currentTab === 'dashboard' ? 'tab-view active' : 'tab-view'}>
                             <KpiRow snapshot={snapshot} />
-                            <DashboardView snapshot={snapshot} forexRates={forexRates} assetMetadata={assetMetadata} transactions={scopedTransactions} />
+                            <DashboardView snapshot={snapshot} forexRates={forexRates} assetMetadata={assetMetadata} portfolioScope={portfolioScope} performanceSaveError={snapshotSaveError} />
                         </div>
 
                         {/* Vue 2 : Positions */}

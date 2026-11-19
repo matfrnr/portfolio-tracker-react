@@ -220,6 +220,8 @@ export default function PositionsView({
                         <tbody>
                             {filteredPositions.map((pos) => {
                                 const isPos = pos.unrealizedPnLNative >= 0
+                                const portfolioType = assetMetadata[pos.ticker]?.portfolioType || (isCryptoTicker(pos.ticker, pos.name) ? 'crypto' : 'stocks')
+                                const isCrypto = portfolioType === 'crypto'
                                 const currentDisplayPrice =
                                     pos.ticker in localPrices
                                         ? localPrices[pos.ticker]
@@ -252,19 +254,21 @@ export default function PositionsView({
                                                     })}
                                                 </details>
                                                 <details className="asset-classification-editor">
-                                                    <summary>Secteur, pays et catégorie</summary>
+                                                    <summary>{isCrypto ? 'Catégorie' : 'Secteur, pays et catégorie'}</summary>
                                                     <label>Type de portefeuille
                                                         <select value={assetMetadata[pos.ticker]?.portfolioType || (isCryptoTicker(pos.ticker, pos.name) ? 'crypto' : 'stocks')} onChange={(event) => onAssetMetadataChange?.(pos.ticker, { portfolioType: event.target.value })}>
                                                             <option value="stocks">Bourse</option>
                                                             <option value="crypto">Crypto</option>
                                                         </select>
                                                     </label>
-                                                    <label>Secteur
-                                                        <input type="text" value={assetMetadata[pos.ticker]?.sector || ''} placeholder="Automatique si vide" onChange={(event) => onAssetMetadataChange?.(pos.ticker, { sector: event.target.value })} />
-                                                    </label>
-                                                    <label>Pays
-                                                        <input type="text" value={assetMetadata[pos.ticker]?.country || ''} placeholder="Automatique si vide" onChange={(event) => onAssetMetadataChange?.(pos.ticker, { country: event.target.value })} />
-                                                    </label>
+                                                    {!isCrypto && <>
+                                                        <label>Secteur
+                                                            <input type="text" value={assetMetadata[pos.ticker]?.sector || ''} placeholder="Automatique si vide" onChange={(event) => onAssetMetadataChange?.(pos.ticker, { sector: event.target.value })} />
+                                                        </label>
+                                                        <label>Pays
+                                                            <input type="text" value={assetMetadata[pos.ticker]?.country || ''} placeholder="Automatique si vide" onChange={(event) => onAssetMetadataChange?.(pos.ticker, { country: event.target.value })} />
+                                                        </label>
+                                                    </>}
                                                 </details>
                                             </div>
                                         </td>

@@ -1901,6 +1901,21 @@ button, input, select, textarea {
 .performance-counts span { padding: 0.32rem 0.6rem; border-radius: 999px; font-size: 0.74rem; font-weight: 600; white-space: nowrap; }
 .performance-gains { background: var(--color-success-bg); color: var(--color-success); }
 .performance-losses { background: var(--color-danger-bg); color: var(--color-danger); }
+.performance-history-card { min-width: 0; }
+.performance-history-header { align-items: center; gap: 1rem; }
+.performance-history-periods { display: flex; flex-wrap: wrap; gap: 0.2rem; padding: 0.2rem; border: 1px solid var(--border-default); border-radius: 999px; background: var(--surface-muted, var(--surface-card)); }
+.performance-history-periods button { padding: 0.42rem 0.68rem; border: 0; border-radius: 999px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 0.75rem; cursor: pointer; white-space: nowrap; }
+.performance-history-periods button.active { background: var(--surface-card); color: var(--text-primary); box-shadow: 0 1px 4px rgb(0 0 0 / 16%); }
+.performance-history-summary { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: 0.25rem 0 0.5rem; }
+.performance-history-summary > div { display: grid; gap: 0.16rem; }
+.performance-history-summary strong { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.performance-history-summary small { font-size: 0.78rem; }
+.performance-history-label { color: var(--text-muted); font-size: 0.72rem; }
+.performance-history-chart { width: 100%; height: 260px; }
+.performance-history-empty { display: grid; min-height: 145px; place-items: center; color: var(--text-muted); font-size: 0.85rem; text-align: center; }
+.performance-history-note { margin: 0.15rem 0 0; color: var(--text-muted); font-size: 0.73rem; line-height: 1.5; }
+.performance-history-warning { margin: 0.5rem 0 0.85rem; padding: 0.65rem 0.8rem; border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent); border-radius: 0.6rem; background: var(--color-danger-bg); color: var(--color-danger); font-size: 0.78rem; line-height: 1.5; }
+.performance-history-warning code { overflow-wrap: anywhere; font-size: 0.72rem; }
 
 @media (max-width: 900px) {
   .allocation-list { grid-template-columns: 1fr; }
@@ -1917,6 +1932,10 @@ button, input, select, textarea {
   .allocation-track { grid-column: 2; grid-row: 2; }
   .allocation-percent { grid-column: 3; grid-row: 1; }
   .allocation-value { grid-column: 3; grid-row: 2; font-size: 0.68rem; }
+  .performance-history-header { align-items: stretch; flex-direction: column; }
+  .performance-history-periods { width: 100%; justify-content: space-between; }
+  .performance-history-periods button { padding: 0.42rem 0.48rem; font-size: 0.69rem; }
+  .performance-history-chart { height: 220px; }
 }
 .dividend-forecast-row { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(100px, 2fr) minmax(85px, auto); align-items: center; gap: 0.8rem; font-size: 0.85rem; }
 .dividend-forecast-label { display: flex; flex-direction: column; min-width: 0; }

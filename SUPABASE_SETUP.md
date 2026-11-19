@@ -4,7 +4,14 @@ The app uses Supabase Auth with email/password and Postgres directly from the br
 
 ## 1. Create the database tables
 
-In the Supabase project SQL Editor, run `supabase/migrations/20261106000000_portfolio_rls.sql`. The migration creates the transaction, price, and settings tables, enables RLS, grants access only to authenticated users, and adds an atomic import function.
+In the Supabase project SQL Editor, run these files in date order:
+
+1. `supabase/migrations/20261106000000_portfolio_rls.sql` creates the transaction, price, and settings tables, enables RLS, grants access only to authenticated users, and adds an atomic import function.
+2. `supabase/migrations/20261119000000_portfolio_snapshots.sql` creates the daily performance history table, with RLS limiting every row to its owner.
+
+The app records the selected portfolio scope (Bourse, Cryptomonnaies, or Tout) when it is opened and after its prices are refreshed. Each day keeps the latest observed value. The history starts when this migration is applied and the app records its first snapshot; older daily values are not reconstructed from incomplete price data.
+
+If the first migration was already run for your project, run only the new snapshots migration.
 
 Do not disable RLS for these tables. Do not add policies that allow `anon` access.
 
