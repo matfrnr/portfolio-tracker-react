@@ -118,19 +118,20 @@ export default function PositionsView({
 
     if (portfolioScope === 'savings') {
         const savingsPosition = positions.find((position) => position.isManualSavings || position.ticker === MANUAL_SAVINGS_TICKER)
+        const hasManualPerformance = Boolean(savingsPosition?.hasManualPerformance)
         return (
             <div className="card positions-card">
                 <div className="positions-header">
                     <div>
                         <h2 className="card-title">Épargne salariale</h2>
-                        <p className="card-subtitle">Valeur globale de tes fonds et performance saisies depuis ton relevé.</p>
+                        <p className="card-subtitle">Valeur globale de tes fonds et performance facultative saisies depuis ton relevé.</p>
                     </div>
                 </div>
                 {savingsPosition ? (
                     <div className="savings-position-summary">
                         <div><span>Valeur actuelle</span><strong>{formatCurrency(savingsPosition.marketValue, 'EUR')}</strong></div>
-                        <div><span>Capital de référence</span><strong>{formatCurrency(savingsPosition.costBasis, 'EUR')}</strong></div>
-                        <div><span>Plus-value / moins-value</span><strong className={savingsPosition.unrealizedPnL >= 0 ? 'text-success' : 'text-danger'}>{formatCurrency(savingsPosition.unrealizedPnL, 'EUR')}</strong></div>
+                        <div><span>Capital de référence</span><strong>{hasManualPerformance ? formatCurrency(savingsPosition.costBasis, 'EUR') : '—'}</strong></div>
+                        <div><span>Plus-value / moins-value</span><strong className={hasManualPerformance ? savingsPosition.unrealizedPnL > 0 ? 'text-success' : savingsPosition.unrealizedPnL < 0 ? 'text-danger' : 'text-secondary' : 'text-secondary'}>{hasManualPerformance ? formatCurrency(savingsPosition.unrealizedPnL, 'EUR') : 'Non renseignée'}</strong></div>
                         <p>Pour modifier ces chiffres, ouvre le tableau de bord de l’épargne salariale.</p>
                     </div>
                 ) : (
@@ -278,6 +279,7 @@ export default function PositionsView({
                                 const isManualSavings = pos.isManualSavings || pos.ticker === MANUAL_SAVINGS_TICKER
                                 const isManualCash = Boolean(pos.isManualCash)
                                 const isManualPosition = isManualSavings || isManualCash
+                                const hasManualPerformance = !isManualSavings || Boolean(pos.hasManualPerformance)
                                 const portfolioType = assetMetadata[pos.ticker]?.portfolioType || (isCryptoTicker(pos.ticker, pos.name) ? 'crypto' : 'stocks')
                                 const isCrypto = portfolioType === 'crypto'
                                 const currentDisplayPrice =
@@ -345,7 +347,7 @@ export default function PositionsView({
                                             )}
                                         </td>
                                         <td className="text-right font-mono text-secondary">
-                                            {isManualCash ? '—' : formatCurrency(pos.costBasisNative, pos.currency)}
+                                            {isManualCash || (isManualSavings && !hasManualPerformance) ? '—' : formatCurrency(pos.costBasisNative, pos.currency)}
                                         </td>
                                         <td className="text-right">
                                             {isManualPosition ? <span className="manual-position-note">{isManualCash ? 'Solde saisi' : 'Valeur saisie'}</span> : <div className="price-input-wrapper">
@@ -371,7 +373,7 @@ export default function PositionsView({
                                             {formatCurrency(pos.marketValueNative, pos.currency)}
                                         </td>
                                         <td className="text-right">
-                                            {isManualCash ? <span className="manual-position-note">—</span> : <>
+                                            {isManualCash || (isManualSavings && !hasManualPerformance) ? <span className="manual-position-note">{isManualSavings ? 'Non renseignée' : '—'}</span> : <>
                                                 <div className={`pnl-badge ${isPos ? 'pos' : 'neg'}`}>
                                                     {formatCurrency(pos.unrealizedPnLNative, pos.currency)}
                                                 </div>

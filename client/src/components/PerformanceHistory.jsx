@@ -20,6 +20,7 @@ const PERIODS = [
     { id: '1y', label: '1 an' },
     { id: 'all', label: 'Tout' },
 ]
+const HISTORY_START_DATE = '2026-11-20'
 
 function localDateKey(date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -77,7 +78,7 @@ export default function PerformanceHistory({ scope, snapshot, trackingStartedAt 
     const allSnapshots = useMemo(() => {
         const today = localDateKey(new Date())
         const byDate = new Map(savedSnapshots.map((item) => [item.date, item]))
-        if (snapshot?.positions?.length > 0) {
+        if (snapshot?.positions?.length > 0 && snapshot.hasTrackedPerformancePositions) {
             byDate.set(today, {
                 date: today,
                 currentValue: snapshot.currentValue,
@@ -94,13 +95,12 @@ export default function PerformanceHistory({ scope, snapshot, trackingStartedAt 
     }, [savedSnapshots, snapshot])
 
     const historySnapshots = useMemo(() => {
-        if (!['all', 'crypto', 'savings'].includes(scope) || !trackingStartedAt || allSnapshots.length === 0) return allSnapshots
-        const trackingStart = new Date(trackingStartedAt).getTime()
-        if (!Number.isFinite(trackingStart)) return allSnapshots
-        const firstTrackedSnapshot = allSnapshots.find((item) => new Date(item.updatedAt || 0).getTime() >= trackingStart)
-        const firstTrackedDate = firstTrackedSnapshot?.date || localDateKey(new Date(trackingStart))
-        return allSnapshots.filter((item) => item.date >= firstTrackedDate)
-    }, [allSnapshots, scope, trackingStartedAt])
+        if (allSnapshots.length === 0) return allSnapshots
+        const trackingStart = trackingStartedAt ? new Date(trackingStartedAt) : null
+        const trackingDate = trackingStart && Number.isFinite(trackingStart.getTime()) ? localDateKey(trackingStart) : HISTORY_START_DATE
+        const effectiveStartDate = trackingDate > HISTORY_START_DATE ? trackingDate : HISTORY_START_DATE
+        return allSnapshots.filter((item) => item.date >= effectiveStartDate)
+    }, [allSnapshots, trackingStartedAt])
 
     const visibleSnapshots = useMemo(() => {
         const today = new Date()
@@ -131,12 +131,10 @@ export default function PerformanceHistory({ scope, snapshot, trackingStartedAt 
         ? periodChange / firstSnapshot.unrealizedPnL * 100
         : null
     const anyError = saveError || loadError
-    const historyWasReset = historySnapshots.length < allSnapshots.length
-    const trackingDate = historySnapshots[0]?.date
-        ? parseLocalDate(historySnapshots[0].date).toLocaleDateString('fr-FR')
-        : trackingStartedAt
-            ? new Date(trackingStartedAt).toLocaleDateString('fr-FR')
-            : null
+    const trackingDateValue = trackingStartedAt ? new Date(trackingStartedAt) : null
+    const trackingDateKey = trackingDateValue && Number.isFinite(trackingDateValue.getTime()) ? localDateKey(trackingDateValue) : HISTORY_START_DATE
+    const chartStartDate = trackingDateKey > HISTORY_START_DATE ? trackingDateKey : HISTORY_START_DATE
+    const chartStartDateLabel = parseLocalDate(chartStartDate).toLocaleDateString('fr-FR')
     const subportfolioHistory = scope === 'crypto' || scope === 'savings' || (scope === 'all' && Boolean(trackingStartedAt))
     const chartDomain = useMemo(() => {
         if (!subportfolioHistory || visibleSnapshots.length === 0) return ['auto', 'auto']
@@ -170,13 +168,9 @@ export default function PerformanceHistory({ scope, snapshot, trackingStartedAt 
                 </div>
             )}
 
-            {trackingDate && (scope === 'crypto' || scope === 'savings' || (scope === 'all' && historyWasReset)) && (
+            {(
                 <div className="performance-history-baseline-note" role="status">
-                    {scope === 'all'
-                        ? `L’historique « Tout » repart du ${trackingDate}, premier relevé incluant les sous-portefeuilles ajoutés. Les relevés précédents sont masqués pour éviter une fausse variation.`
-                        : scope === 'crypto'
-                            ? `L’historique crypto commence au premier relevé du ${trackingDate}. Les achats antérieurs servent au calcul du PRU, mais ne recréent pas de relevés passés.`
-                            : `L’historique de l’épargne salariale commence au premier relevé du ${trackingDate}.`}
+                    Courbe affichée depuis le {chartStartDateLabel}. Les relevés antérieurs sont masqués ; le premier point reprend la plus-value latente réelle du relevé.
                 </div>
             )}
 

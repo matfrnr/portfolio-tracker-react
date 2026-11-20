@@ -104,7 +104,7 @@ function AssetAxisTick({ x, y, payload, data }) {
 export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.085 }, assetMetadata = {}, portfolioScope = 'stocks', trackingStartedAt = null, savingsData = {}, onSavingsSave, cashData = {}, onCashSave, performanceSaveError = null }) {
     const [dividendRates, setDividendRates] = useState({})
     const [allocationMode, setAllocationMode] = useState('asset')
-    const { positions, invested, currentValue, cashValue = 0, unrealizedPnL, realizedPnL, dividendsNet, dataIssues, dataWarnings, topPerformer, worstPerformer } =
+    const { positions, invested, currentValue, cashValue = 0, hasTrackedPerformancePositions = false, unrealizedPnL, realizedPnL, dividendsNet, dataIssues, dataWarnings, topPerformer, worstPerformer } =
         snapshot
     const visibleAllocationMode = ['crypto', 'savings', 'cash'].includes(portfolioScope) ? 'asset' : allocationMode
     const dividendPositions = useMemo(() => positions.filter((position) => {
@@ -142,7 +142,7 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
     }, [positions, visibleAllocationMode, assetMetadata])
 
     const pnlData = useMemo(() => {
-        return positions.filter((position) => !position.isManualCash)
+        return positions.filter((position) => !position.isManualCash && (!position.isManualSavings || position.hasManualPerformance))
             .sort((a, b) => b.unrealizedPnL - a.unrealizedPnL)
             .map((p) => ({
                 ticker: p.isManualSavings ? 'Épargne salariale' : p.ticker,
@@ -206,7 +206,7 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
 
     return (
         <div className="dashboard-grid">
-            <PerformanceHistory scope={portfolioScope} snapshot={snapshot} trackingStartedAt={trackingStartedAt} saveError={performanceSaveError} />
+            {hasTrackedPerformancePositions && <PerformanceHistory scope={portfolioScope} snapshot={snapshot} trackingStartedAt={trackingStartedAt} saveError={performanceSaveError} />}
             {showDividendSummary && <div className="card dashboard-card full-span dividend-forecast-card">
                 <div className="card-header-flex">
                     <div>
@@ -344,8 +344,8 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
                         </div>
                         <div>
                             <span className="stat-label">Capital investi</span>
-                            <div className="stat-val">{formatCurrency(invested)}</div>
-                            <span className="stat-desc">Total des investissements</span>
+                            <div className="stat-val">{hasTrackedPerformancePositions ? formatCurrency(invested) : '—'}</div>
+                            <span className="stat-desc">{hasTrackedPerformancePositions ? 'Total des investissements suivis' : 'Performance non renseignée'}</span>
                         </div>
                     </div>
 
@@ -361,15 +361,15 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
                     </div>
 
                     <div className="summary-stat-box">
-                        <div className={`stat-icon-wrapper ${unrealizedPnL >= 0 ? 'green' : 'red'}`}>
-                            {unrealizedPnL >= 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
+                        <div className={`stat-icon-wrapper ${!hasTrackedPerformancePositions ? 'blue' : unrealizedPnL > 0 ? 'green' : unrealizedPnL < 0 ? 'red' : 'blue'}`}>
+                            {!hasTrackedPerformancePositions || unrealizedPnL === 0 ? <Briefcase size={20} /> : unrealizedPnL > 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
                         </div>
                         <div>
                             <span className="stat-label">Plus-value latente</span>
-                            <div className={`stat-val ${unrealizedPnL >= 0 ? 'text-success' : 'text-danger'}`}>
-                                {formatCurrency(unrealizedPnL)}
+                            <div className={`stat-val ${!hasTrackedPerformancePositions ? 'text-secondary' : unrealizedPnL > 0 ? 'text-success' : unrealizedPnL < 0 ? 'text-danger' : 'text-secondary'}`}>
+                                {hasTrackedPerformancePositions ? formatCurrency(unrealizedPnL) : '—'}
                             </div>
-                            <span className="stat-desc">{formatPercent(invested > 0 ? (unrealizedPnL / invested) * 100 : 0, true)} sur les positions ouvertes</span>
+                            <span className="stat-desc">{hasTrackedPerformancePositions ? `${formatPercent(invested > 0 ? (unrealizedPnL / invested) * 100 : 0, true)} sur les positions ouvertes${cashValue > 0 ? ', hors livrets' : ''}` : 'Plus-value / moins-value non renseignée'}</span>
                         </div>
                     </div>
 

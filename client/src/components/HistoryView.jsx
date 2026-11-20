@@ -19,27 +19,51 @@ import {
     Calendar,
 } from 'lucide-react'
 
+const HISTORY_RECENT_START = '2026-11-01'
+
 export default function HistoryView({ transactions = [], onDelete, onEdit, forexRate = 1.085, forexRates = { USD: forexRate }, currencies = {} }) {
     const [historyTab, setHistoryTab] = useState('ALL')
     const [searchQuery, setSearchQuery] = useState('')
+    const [dateFrom, setDateFrom] = useState('')
+    const [dateTo, setDateTo] = useState('')
+    const [showOlder, setShowOlder] = useState(false)
+    const [sellResultFilter, setSellResultFilter] = useState('ALL')
     const [deleteCandidate, setDeleteCandidate] = useState(null)
     const realizedGains = useMemo(() => realizedPnLByTransaction(transactions, forexRates || forexRate), [transactions, forexRates, forexRate])
 
     // Filtrage dynamique
-    const filteredTransactions = useMemo(() => {
+    const matchingTransactions = useMemo(() => {
         return [...transactions]
             .filter((tx) => {
                 if (historyTab !== 'ALL' && tx.type !== historyTab) return false
+                if (historyTab === 'SELL' && tx.type === 'SELL' && sellResultFilter !== 'ALL') {
+                    const realizedPnL = realizedGains.get(tx.id)
+                    if (sellResultFilter === 'GAIN' && !(realizedPnL > 0)) return false
+                    if (sellResultFilter === 'LOSS' && !(realizedPnL < 0)) return false
+                }
+                const txDate = String(tx.date || '').slice(0, 10)
+                if (dateFrom && txDate < dateFrom) return false
+                if (dateTo && txDate > dateTo) return false
                 if (!searchQuery.trim()) return true
                 const q = searchQuery.trim().toLowerCase()
                 return (
-                    tx.ticker.toLowerCase().includes(q) ||
-                    (tx.name && tx.name.toLowerCase().includes(q)) ||
-                    (tx.note && tx.note.toLowerCase().includes(q))
+                    String(tx.ticker || '').toLowerCase().includes(q) ||
+                    String(tx.name || '').toLowerCase().includes(q) ||
+                    String(tx.note || '').toLowerCase().includes(q)
                 )
             })
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    }, [transactions, historyTab, searchQuery])
+    }, [transactions, historyTab, searchQuery, dateFrom, dateTo, sellResultFilter, realizedGains])
+
+    const hasCustomDateRange = Boolean(dateFrom || dateTo)
+    const olderTransactions = useMemo(() => hasCustomDateRange
+        ? []
+        : matchingTransactions.filter((tx) => String(tx.date || '').slice(0, 10) < HISTORY_RECENT_START),
+    [matchingTransactions, hasCustomDateRange])
+    const recentTransactions = useMemo(() => hasCustomDateRange || showOlder
+        ? matchingTransactions
+        : matchingTransactions.filter((tx) => String(tx.date || '').slice(0, 10) >= HISTORY_RECENT_START),
+    [matchingTransactions, hasCustomDateRange, showOlder])
 
     // Totaux filtrés consolidés en EUR
     const stats = useMemo(() => {
@@ -47,8 +71,9 @@ export default function HistoryView({ transactions = [], onDelete, onEdit, forex
         let totalSell = 0
         let totalFees = 0
         let dividendsNet = 0
+        let realizedSalesPnL = 0
 
-        for (const tx of transactions) {
+        for (const tx of recentTransactions) {
             const qty = Number(tx.quantity || 0)
             const price = Number(tx.unitPrice || 0)
             const fees = Number(tx.fees || 0)
@@ -62,13 +87,37 @@ export default function HistoryView({ transactions = [], onDelete, onEdit, forex
                 totalBuy += (qty * price + fees) / rate
             } else if (tx.type === 'SELL') {
                 totalSell += (qty * price - fees) / rate
+                realizedSalesPnL += realizedGains.get(tx.id) || 0
             } else if (tx.type === 'DIVIDEND') {
                 dividendsNet += (price - fees) / rate
             }
         }
 
-        return { totalBuy, totalSell, totalFees, dividendsNet }
-    }, [transactions, forexRates, forexRate, currencies])
+        return { totalBuy, totalSell, totalFees, dividendsNet, realizedSalesPnL }
+    }, [recentTransactions, forexRates, forexRate, currencies, realizedGains])
+
+    const visibleStats = historyTab === 'BUY'
+        ? [
+            { label: 'Total achats (frais inclus)', value: stats.totalBuy, tone: 'text-primary' },
+            { label: 'Frais d’achat', value: stats.totalFees, tone: 'text-muted' },
+        ]
+        : historyTab === 'SELL'
+            ? [
+                { label: 'Total ventes nettes', value: stats.totalSell, tone: 'text-accent' },
+                { label: 'Plus-value / moins-value réalisée', value: stats.realizedSalesPnL, tone: stats.realizedSalesPnL > 0 ? 'text-success' : stats.realizedSalesPnL < 0 ? 'text-danger' : 'text-secondary' },
+                { label: 'Frais de vente', value: stats.totalFees, tone: 'text-muted' },
+            ]
+            : historyTab === 'DIVIDEND'
+                ? [
+                    { label: 'Dividendes nets perçus', value: stats.dividendsNet, tone: 'text-success' },
+                    { label: 'Retenues et frais', value: stats.totalFees, tone: 'text-muted' },
+                ]
+                : [
+                    { label: 'Total achats (frais inclus)', value: stats.totalBuy, tone: 'text-primary' },
+                    { label: 'Total ventes nettes', value: stats.totalSell, tone: 'text-accent' },
+                    { label: 'Frais et retenues cumulés', value: stats.totalFees, tone: 'text-muted' },
+                    { label: 'Dividendes nets perçus', value: stats.dividendsNet, tone: 'text-success' },
+                ]
 
     function confirmDelete() {
         if (deleteCandidate) {
@@ -121,33 +170,39 @@ export default function HistoryView({ transactions = [], onDelete, onEdit, forex
 
             {/* Statistiques rapides de l'historique */}
             <div className="history-mini-stats">
-                <div className="mini-stat">
-                    <span className="mini-stat-label">Total achats (avec frais)</span>
-                    <strong className="mini-stat-val text-primary">
-                        {formatCurrency(stats.totalBuy)}
-                    </strong>
-                </div>
-                <div className="mini-stat">
-                    <span className="mini-stat-label">Total ventes nettes</span>
-                    <strong className="mini-stat-val text-accent">
-                        {formatCurrency(stats.totalSell)}
-                    </strong>
-                </div>
-                <div className="mini-stat">
-                    <span className="mini-stat-label">Frais et retenues cumulés</span>
-                    <strong className="mini-stat-val text-muted">
-                        {formatCurrency(stats.totalFees)}
-                    </strong>
-                </div>
-                <div className="mini-stat">
-                    <span className="mini-stat-label">Dividendes nets perçus</span>
-                    <strong className="mini-stat-val text-success">
-                        {formatCurrency(stats.dividendsNet)}
-                    </strong>
-                </div>
+                <p className="history-stats-caption">Totaux des opérations affichées</p>
+                {visibleStats.map((item) => (
+                    <div className="mini-stat" key={item.label}>
+                        <span className="mini-stat-label">{item.label}</span>
+                        <strong className={`mini-stat-val ${item.tone}`}>{formatCurrency(item.value, 'EUR')}</strong>
+                    </div>
+                ))}
             </div>
 
-            {/* Barre de recherche */}
+            <div className="history-filter-controls">
+                <label>
+                    <span>Du</span>
+                    <input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setShowOlder(false) }} aria-label="Date de début de l’historique" />
+                </label>
+                <label>
+                    <span>Au</span>
+                    <input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setShowOlder(false) }} aria-label="Date de fin de l’historique" />
+                </label>
+                {hasCustomDateRange ? <button type="button" className="history-reset-filter" onClick={() => { setDateFrom(''); setDateTo(''); setShowOlder(false) }}>Effacer les dates</button> : <span className="history-default-range">Affichage par défaut depuis le 1er novembre 2026</span>}
+            </div>
+
+            {historyTab === 'SELL' && (
+                <div className="history-result-filter" role="group" aria-label="Filtrer les ventes par résultat réalisé">
+                    <span>Résultat de la vente</span>
+                    <div className="history-result-filter-buttons">
+                        <button type="button" className={sellResultFilter === 'ALL' ? 'active' : ''} aria-pressed={sellResultFilter === 'ALL'} onClick={() => setSellResultFilter('ALL')}>Toutes</button>
+                        <button type="button" className={sellResultFilter === 'GAIN' ? 'active positive' : ''} aria-pressed={sellResultFilter === 'GAIN'} onClick={() => setSellResultFilter('GAIN')}>Plus-values</button>
+                        <button type="button" className={sellResultFilter === 'LOSS' ? 'active negative' : ''} aria-pressed={sellResultFilter === 'LOSS'} onClick={() => setSellResultFilter('LOSS')}>Moins-values</button>
+                    </div>
+                </div>
+            )}
+
+            {/* Recherche et opérations anciennes */}
             <div className="table-toolbar">
                 <div className="search-bar">
                     <Search size={16} className="search-icon" />
@@ -158,18 +213,23 @@ export default function HistoryView({ transactions = [], onDelete, onEdit, forex
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
+                {!hasCustomDateRange && olderTransactions.length > 0 && (
+                    <button type="button" className="history-expand-button" onClick={() => setShowOlder((current) => !current)}>
+                        {showOlder ? 'Masquer les opérations avant novembre' : `Voir les ${olderTransactions.length} opérations antérieures à novembre`}
+                    </button>
+                )}
                 <span className="results-count">
-                    {filteredTransactions.length} opération{filteredTransactions.length > 1 ? 's' : ''} trouvée{filteredTransactions.length > 1 ? 's' : ''}
+                    {recentTransactions.length} affichée{recentTransactions.length > 1 ? 's' : ''} sur {matchingTransactions.length} résultat{matchingTransactions.length > 1 ? 's' : ''}
                 </span>
             </div>
 
-            {filteredTransactions.length === 0 ? (
+            {recentTransactions.length === 0 ? (
                 <div className="empty-state">
-                    <p>Aucune transaction ne correspond aux critères sélectionnés.</p>
+                    <p>{olderTransactions.length > 0 ? 'Aucune opération depuis le 1er novembre. Les opérations plus anciennes sont masquées.' : 'Aucune transaction ne correspond aux critères sélectionnés.'}</p>
                 </div>
             ) : (
                 <div className="history-list">
-                    {filteredTransactions.map((tx) => {
+                    {recentTransactions.map((tx) => {
                         const isBuy = tx.type === 'BUY'
                         const isSell = tx.type === 'SELL'
                         const isDividend = tx.type === 'DIVIDEND'

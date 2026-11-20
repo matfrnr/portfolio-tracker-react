@@ -193,12 +193,15 @@ export default function App({ user = null, onSignOut }) {
             const existing = current[MANUAL_SAVINGS_TICKER] || {}
             const now = updates.updatedAt || new Date().toISOString()
             const trackingStartedAt = existing.trackingStartedAt || (Number(updates.currentValue) > 0 ? now : null)
+            const hasPerformance = updates.unrealizedPnL !== null && updates.unrealizedPnL !== undefined && parseNumber(updates.unrealizedPnL, 0) !== 0
+            const performanceStartedAt = hasPerformance ? existing.performanceStartedAt || now : null
             return {
                 ...current,
                 [MANUAL_SAVINGS_TICKER]: {
                     ...existing,
                     ...updates,
                     ...(trackingStartedAt ? { trackingStartedAt } : {}),
+                    performanceStartedAt,
                 },
             }
         })
@@ -405,7 +408,11 @@ export default function App({ user = null, onSignOut }) {
             .filter((timestamp) => Number.isFinite(timestamp) && timestamp > 0)
         return timestamps.length ? new Date(Math.min(...timestamps)).toISOString() : null
     }, [transactions, assetMetadata])
-    const savingsTrackingStartedAt = assetMetadata[MANUAL_SAVINGS_TICKER]?.trackingStartedAt || null
+    const savedSavingsSettings = assetMetadata[MANUAL_SAVINGS_TICKER] || {}
+    const hasManualSavingsPerformance = savedSavingsSettings.unrealizedPnL !== null && savedSavingsSettings.unrealizedPnL !== undefined && parseNumber(savedSavingsSettings.unrealizedPnL, 0) !== 0
+    const savingsTrackingStartedAt = hasManualSavingsPerformance
+        ? savedSavingsSettings.performanceStartedAt || savedSavingsSettings.updatedAt || savedSavingsSettings.trackingStartedAt || null
+        : null
     const combinedTrackingStartedAt = useMemo(() => {
         const timestamps = [cryptoTrackingStartedAt, savingsTrackingStartedAt]
             .map((value) => new Date(value || 0).getTime())
@@ -439,10 +446,12 @@ export default function App({ user = null, onSignOut }) {
             const includeCash = portfolioScope === 'all' || portfolioScope === 'cash'
             const savingsSettings = assetMetadata[MANUAL_SAVINGS_TICKER] || {}
             const savingsValue = Math.max(0, parseNumber(savingsSettings.currentValue, 0))
-            const savingsPnL = Math.min(parseNumber(savingsSettings.unrealizedPnL, 0), savingsValue)
-            const savingsInvested = savingsValue - savingsPnL
+            const rawSavingsPnL = savingsSettings.unrealizedPnL
+            const hasManualSavingsPerformance = rawSavingsPnL !== undefined && rawSavingsPnL !== null && parseNumber(rawSavingsPnL, 0) !== 0
+            const savingsPnL = hasManualSavingsPerformance ? Math.min(parseNumber(rawSavingsPnL, 0), savingsValue) : 0
+            const savingsInvested = hasManualSavingsPerformance ? savingsValue - savingsPnL : 0
             if (includeSavings && (savingsValue > 0 || savingsSettings.trackingStartedAt)) {
-                const savingsReturn = savingsInvested > 0 ? savingsPnL / savingsInvested * 100 : 0
+                const savingsReturn = hasManualSavingsPerformance && savingsInvested > 0 ? savingsPnL / savingsInvested * 100 : 0
                 positions.push({
                     ticker: MANUAL_SAVINGS_TICKER,
                     name: 'Épargne salariale',
@@ -463,6 +472,7 @@ export default function App({ user = null, onSignOut }) {
                     unrealizedPct: savingsReturn,
                     unrealizedPctNative: savingsReturn,
                     isManualSavings: true,
+                    hasManualPerformance: hasManualSavingsPerformance,
                 })
             }
             const cashSettings = assetMetadata[MANUAL_CASH_ACCOUNTS_KEY] || {}
@@ -494,14 +504,15 @@ export default function App({ user = null, onSignOut }) {
             }) : []
             positions.push(...cashPositions)
             const currentValue = positions.reduce((sum, position) => sum + position.marketValue, 0)
-            const investmentPositions = positions.filter((position) => !position.isManualCash)
+            const investmentPositions = positions.filter((position) => !position.isManualCash && (!position.isManualSavings || position.hasManualPerformance))
             const invested = investmentPositions.reduce((sum, position) => sum + position.costBasis, 0)
             const unrealizedPnL = investmentPositions.reduce((sum, position) => sum + position.unrealizedPnL, 0)
             const cashValue = cashPositions.reduce((sum, position) => sum + position.marketValue, 0)
             const realizedPnL = base.realizedPnL
             const dividendsNet = base.dividendsNet
             const totalPnL = unrealizedPnL + realizedPnL + dividendsNet
-            const totalBought = base.totalBought + (includeSavings ? savingsInvested : 0)
+            const totalBought = base.totalBought + (includeSavings && hasManualSavingsPerformance ? savingsInvested : 0)
+            const untrackedSavingsValue = includeSavings && !hasManualSavingsPerformance ? savingsValue : 0
             const totalsByCurrency = new Map()
             for (const position of positions) {
                 totalsByCurrency.set(position.currency, (totalsByCurrency.get(position.currency) || 0) + position.marketValueNative)
@@ -511,12 +522,16 @@ export default function App({ user = null, onSignOut }) {
                 allocationWeight: (totalsByCurrency.get(position.currency) || 0) > 0 ? position.marketValueNative / totalsByCurrency.get(position.currency) * 100 : 0,
                 allocationWeightEUR: currentValue > 0 ? position.marketValue / currentValue * 100 : 0,
             }))
-            const ranked = normalizedPositions.filter((position) => !position.isManualCash).sort((a, b) => b.unrealizedPct - a.unrealizedPct)
+            const ranked = normalizedPositions.filter((position) => !position.isManualCash && (!position.isManualSavings || position.hasManualPerformance)).sort((a, b) => b.unrealizedPct - a.unrealizedPct)
+            const hasTrackedPerformancePositions = investmentPositions.length > 0 || base.transactionCount > 0
             return {
                 ...base,
                 positions: normalizedPositions,
                 currentValue,
                 cashValue,
+                untrackedSavingsValue,
+                hasManualSavingsPerformance: includeSavings && hasManualSavingsPerformance,
+                hasTrackedPerformancePositions,
                 invested,
                 unrealizedPnL,
                 unrealizedPct: invested > 0 ? unrealizedPnL / invested * 100 : 0,
@@ -539,7 +554,7 @@ export default function App({ user = null, onSignOut }) {
 
     // Conserve le dernier état constaté de chaque journée pour le périmètre affiché.
     useEffect(() => {
-        if (loading || isOffline || isRefreshing || !settingsReady || ['savings', 'cash'].includes(portfolioScope) || snapshot.positions.length <= 0) return undefined
+        if (loading || isOffline || isRefreshing || !settingsReady || ['savings', 'cash'].includes(portfolioScope) || snapshot.positions.length <= 0 || !snapshot.hasTrackedPerformancePositions) return undefined
         const timeout = setTimeout(() => {
             savePerformanceSnapshot(portfolioScope, snapshot).then(() => {
                 setSnapshotSaveError('')
@@ -549,7 +564,7 @@ export default function App({ user = null, onSignOut }) {
             })
         }, 800)
         return () => clearTimeout(timeout)
-    }, [loading, isOffline, isRefreshing, settingsReady, portfolioScope, snapshot.positions.length, snapshot.transactionCount, snapshot.currentValue, snapshot.invested, snapshot.realizedPnL, snapshot.unrealizedPnL, snapshot.dividendsNet, snapshot.totalPnL])
+    }, [loading, isOffline, isRefreshing, settingsReady, portfolioScope, snapshot.positions.length, snapshot.hasTrackedPerformancePositions, snapshot.transactionCount, snapshot.currentValue, snapshot.invested, snapshot.realizedPnL, snapshot.unrealizedPnL, snapshot.dividendsNet, snapshot.totalPnL])
 
     const importHistoryIssues = useMemo(() => {
         if (!importPreview) return []

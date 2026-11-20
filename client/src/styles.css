@@ -388,6 +388,11 @@ button, input, select, textarea {
   color: var(--color-danger);
 }
 
+.kpi-icon-badge.neutral {
+  background: var(--surface-subtle);
+  color: var(--text-muted);
+}
+
 .kpi-main-val {
   font-size: 1.5rem;
   font-weight: 700;
@@ -401,6 +406,17 @@ button, input, select, textarea {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.kpi-bottom-stacked {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kpi-bottom-stacked .delta-badge {
+  padding: 3px 9px;
+  font-size: 0.82rem;
 }
 
 .delta-badge {
@@ -423,9 +439,20 @@ button, input, select, textarea {
   color: var(--color-danger);
 }
 
+.delta-badge.neutral {
+  background: var(--surface-subtle);
+  color: var(--text-muted);
+}
+
 .kpi-subtext {
   font-size: 0.775rem;
   color: var(--text-muted);
+}
+
+.kpi-subtext-multiline {
+  display: block;
+  max-width: 100%;
+  line-height: 1.35;
 }
 
 /* ==========================================================================
@@ -1260,13 +1287,117 @@ button, input, select, textarea {
 
 .history-mini-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 1rem;
   margin: 1.25rem 0;
   padding: 1rem;
   background: var(--surface-subtle);
   border-radius: var(--radius-md);
 }
+
+.history-stats-caption {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.history-filter-controls {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin: 1rem 0 0.4rem;
+}
+
+.history-filter-controls label {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.history-filter-controls input {
+  min-height: 38px;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.history-default-range {
+  padding-bottom: 0.55rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.history-reset-filter,
+.history-expand-button {
+  min-height: 38px;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.history-expand-button {
+  border-color: color-mix(in srgb, var(--color-accent) 35%, var(--border-default));
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.history-reset-filter:hover,
+.history-expand-button:hover {
+  background: var(--surface-subtle);
+}
+
+.history-result-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin: 0.85rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.history-result-filter-buttons {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+}
+
+.history-result-filter-buttons button {
+  padding: 0.38rem 0.7rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.history-result-filter-buttons button.active {
+  background: var(--surface-card);
+  color: var(--text-primary);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 14%);
+}
+
+.history-result-filter-buttons button.active.positive { color: var(--color-success); }
+.history-result-filter-buttons button.active.negative { color: var(--color-danger); }
 
 .mini-stat {
   display: flex;
@@ -1962,6 +2093,18 @@ button, input, select, textarea {
   .history-mini-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .history-filter-controls label {
+    flex: 1 1 calc(50% - 0.7rem);
+  }
+
+  .history-default-range {
+    flex-basis: 100%;
+  }
+
+  .history-result-filter { align-items: flex-start; flex-direction: column; }
+  .history-result-filter-buttons { max-width: 100%; }
+  .history-result-filter-buttons button { padding-inline: 0.55rem; }
 }
 .asset-metadata-input {
   width: 145px;
