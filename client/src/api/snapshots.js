@@ -43,7 +43,7 @@ export async function getPerformanceSnapshots(scope) {
 }
 
 export async function savePerformanceSnapshot(scope, snapshot, date = new Date()) {
-    if (!snapshot || snapshot.transactionCount <= 0) return null
+    if (!snapshot || !Array.isArray(snapshot.positions) || snapshot.positions.length === 0) return null
     const snapshotDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
     const row = {
         snapshot_date: snapshotDate,

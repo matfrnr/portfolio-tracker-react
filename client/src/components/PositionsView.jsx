@@ -4,6 +4,9 @@ import {
     formatPercent,
     formatQty,
     formatAssetName,
+    isCryptoTicker,
+    MANUAL_SAVINGS_TICKER,
+    MANUAL_CASH_ASSETS,
 } from '../lib/portfolio'
 import {
     Search,
@@ -16,7 +19,6 @@ import {
     SlidersHorizontal,
     Sparkles,
 } from 'lucide-react'
-import { isCryptoTicker } from '../lib/portfolio'
 
 export default function PositionsView({
     positions = [],
@@ -30,6 +32,8 @@ export default function PositionsView({
     onAssetMetadataChange,
     tagCatalog = [],
     onTagCatalogChange,
+    portfolioScope = 'stocks',
+    cashData = {},
 }) {
     const [searchQuery, setSearchQuery] = useState('')
     const [sortField, setSortField] = useState('marketValue')
@@ -112,13 +116,60 @@ export default function PositionsView({
         }
     }
 
+    if (portfolioScope === 'savings') {
+        const savingsPosition = positions.find((position) => position.isManualSavings || position.ticker === MANUAL_SAVINGS_TICKER)
+        return (
+            <div className="card positions-card">
+                <div className="positions-header">
+                    <div>
+                        <h2 className="card-title">Épargne salariale</h2>
+                        <p className="card-subtitle">Valeur globale de tes fonds et performance saisies depuis ton relevé.</p>
+                    </div>
+                </div>
+                {savingsPosition ? (
+                    <div className="savings-position-summary">
+                        <div><span>Valeur actuelle</span><strong>{formatCurrency(savingsPosition.marketValue, 'EUR')}</strong></div>
+                        <div><span>Capital de référence</span><strong>{formatCurrency(savingsPosition.costBasis, 'EUR')}</strong></div>
+                        <div><span>Plus-value / moins-value</span><strong className={savingsPosition.unrealizedPnL >= 0 ? 'text-success' : 'text-danger'}>{formatCurrency(savingsPosition.unrealizedPnL, 'EUR')}</strong></div>
+                        <p>Pour modifier ces chiffres, ouvre le tableau de bord de l’épargne salariale.</p>
+                    </div>
+                ) : (
+                    <div className="empty-state"><p>Renseigne ton solde depuis le tableau de bord pour commencer.</p></div>
+                )}
+            </div>
+        )
+    }
+
+    if (portfolioScope === 'cash') {
+        const total = MANUAL_CASH_ASSETS.reduce((sum, asset) => sum + (Number(cashData[asset.key]) || 0), 0)
+        return (
+            <div className="card positions-card">
+                <div className="positions-header">
+                    <div>
+                        <h2 className="card-title">Livrets</h2>
+                        <p className="card-subtitle">Soldes saisis manuellement, sans suivi de performance.</p>
+                    </div>
+                </div>
+                <div className="manual-cash-position-summary">
+                    {MANUAL_CASH_ASSETS.map((asset) => (
+                        <div key={asset.key}><span>{asset.name}</span><strong>{formatCurrency(Number(cashData[asset.key]) || 0, 'EUR')}</strong></div>
+                    ))}
+                    <div className="manual-cash-position-total"><span>Total des livrets</span><strong>{formatCurrency(total, 'EUR')}</strong></div>
+                    <p>Pour modifier ces montants, ouvre le tableau de bord des livrets.</p>
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div className="card positions-card">
             <div className="positions-header">
                 <div>
-                    <h2 className="card-title">Positions ouvertes</h2>
+                    <h2 className="card-title">{portfolioScope === 'savings' ? 'Épargne salariale' : 'Positions ouvertes'}</h2>
                     <p className="card-subtitle">
-                        Suivez en temps réel la valorisation, le PRU et les plus-values latentes de vos investissements.
+                        {portfolioScope === 'savings'
+                            ? 'Valeur globale et performance saisies depuis ton relevé.'
+                            : 'Suivez en temps réel la valorisation, le PRU et les plus-values latentes de vos investissements.'}
                     </p>
                 </div>
 
@@ -154,16 +205,20 @@ export default function PositionsView({
                         <>
                             <div className="empty-state-icon">💼</div>
                             <h3>Aucune position ouverte</h3>
-                            <p>Ajoutez votre première transaction pour voir apparaître vos lignes de portefeuille.</p>
-                            <button
-                                type="button"
-                                className="btn-primary"
-                                style={{ marginTop: '1rem' }}
-                                onClick={() => onQuickAction && onQuickAction('BUY', {})}
-                            >
-                                <PlusCircle size={16} />
-                                Ajouter un achat
-                            </button>
+                            {portfolioScope === 'savings' ? (
+                                <p>Renseigne ton solde depuis le tableau de bord pour suivre ton épargne salariale.</p>
+                            ) : <>
+                                <p>Ajoutez votre première transaction pour voir apparaître vos lignes de portefeuille.</p>
+                                <button
+                                    type="button"
+                                    className="btn-primary"
+                                    style={{ marginTop: '1rem' }}
+                                    onClick={() => onQuickAction && onQuickAction('BUY', {})}
+                                >
+                                    <PlusCircle size={16} />
+                                    Ajouter un achat
+                                </button>
+                            </>}
                         </>
                     ) : (
                         <p>Aucune position ne correspond à votre recherche "{searchQuery}".</p>
@@ -220,6 +275,9 @@ export default function PositionsView({
                         <tbody>
                             {filteredPositions.map((pos) => {
                                 const isPos = pos.unrealizedPnLNative >= 0
+                                const isManualSavings = pos.isManualSavings || pos.ticker === MANUAL_SAVINGS_TICKER
+                                const isManualCash = Boolean(pos.isManualCash)
+                                const isManualPosition = isManualSavings || isManualCash
                                 const portfolioType = assetMetadata[pos.ticker]?.portfolioType || (isCryptoTicker(pos.ticker, pos.name) ? 'crypto' : 'stocks')
                                 const isCrypto = portfolioType === 'crypto'
                                 const currentDisplayPrice =
@@ -235,25 +293,27 @@ export default function PositionsView({
                                             <div className="ticker-badge-box">
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                                     <span className="ticker-sym">{formatAssetName(pos.name, pos.ticker)}</span>
+                                                    {isManualSavings && <span className="asset-tag-chip">Saisie manuelle</span>}
+                                                    {isManualCash && <span className="asset-tag-chip">Livret</span>}
                                                     {pos.currency !== 'EUR' && (
                                                         <span className="badge badge-buy" style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}>
                                                             {pos.currency}
                                                         </span>
                                                     )}
                                                 </div>
-                                                <div className="asset-tag-chips">
+                                                {!isManualPosition && <div className="asset-tag-chips">
                                                     {(Array.isArray(assetMetadata[pos.ticker]?.tags) ? assetMetadata[pos.ticker].tags : String(assetMetadata[pos.ticker]?.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean)).map((tag) => (
                                                         <span className="asset-tag-chip" key={tag}>{tag}</span>
                                                     ))}
-                                                </div>
-                                                <details className="tag-picker"><summary>Gérer les étiquettes</summary>
+                                                </div>}
+                                                {!isManualPosition && <details className="tag-picker"><summary>Gérer les étiquettes</summary>
                                                     {tagCatalog.map((tag) => {
                                                         const current = assetMetadata[pos.ticker]?.tags || []
                                                         const selected = Array.isArray(current) ? current : String(current).split(',').map((item) => item.trim())
                                                         return <label key={tag}><input type="checkbox" checked={selected.includes(tag)} onChange={(e) => onAssetMetadataChange?.(pos.ticker, { tags: e.target.checked ? [...selected, tag] : selected.filter((item) => item !== tag) })} />{tag}</label>
                                                     })}
-                                                </details>
-                                                <details className="asset-classification-editor">
+                                                </details>}
+                                                {!isManualPosition && <details className="asset-classification-editor">
                                                     <summary>{isCrypto ? 'Catégorie' : 'Secteur, pays et catégorie'}</summary>
                                                     <label>Type de portefeuille
                                                         <select value={assetMetadata[pos.ticker]?.portfolioType || (isCryptoTicker(pos.ticker, pos.name) ? 'crypto' : 'stocks')} onChange={(event) => onAssetMetadataChange?.(pos.ticker, { portfolioType: event.target.value })}>
@@ -269,14 +329,14 @@ export default function PositionsView({
                                                             <input type="text" value={assetMetadata[pos.ticker]?.country || ''} placeholder="Automatique si vide" onChange={(event) => onAssetMetadataChange?.(pos.ticker, { country: event.target.value })} />
                                                         </label>
                                                     </>}
-                                                </details>
+                                                </details>}
                                             </div>
                                         </td>
                                         <td className="text-right font-mono font-medium">
-                                            {formatQty(pos.quantity)}
+                                            {isManualPosition ? '—' : formatQty(pos.quantity)}
                                         </td>
-                                        <td className="text-right font-mono pru-cell" title="Double-cliquez pour modifier le PRU">
-                                            {editingPru?.ticker === pos.ticker ? (
+                                        <td className="text-right font-mono pru-cell" title={isManualPosition ? 'Montant suivi sans quantité ni PRU par part' : 'Double-cliquez pour modifier le PRU'}>
+                                            {isManualPosition ? '—' : editingPru?.ticker === pos.ticker ? (
                                                 <input autoFocus className="price-input pru-edit-input" type="number" min="0.000001" step="any" value={editingPru.value} onChange={(e) => setEditingPru({ ...editingPru, value: e.target.value })} onBlur={() => { const value = Number(String(editingPru.value).replace(',', '.')); if (value > 0) onAssetMetadataChange?.(pos.ticker, { pruOverride: value }); setEditingPru(null) }} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setEditingPru(null) }} />
                                             ) : (
                                                 <button type="button" className="pru-edit-button" onDoubleClick={() => setEditingPru({ ticker: pos.ticker, value: String(pos.averageCost) })} title="Double-cliquez pour modifier le PRU">
@@ -285,10 +345,10 @@ export default function PositionsView({
                                             )}
                                         </td>
                                         <td className="text-right font-mono text-secondary">
-                                            {formatCurrency(pos.costBasisNative, pos.currency)}
+                                            {isManualCash ? '—' : formatCurrency(pos.costBasisNative, pos.currency)}
                                         </td>
                                         <td className="text-right">
-                                            <div className="price-input-wrapper">
+                                            {isManualPosition ? <span className="manual-position-note">{isManualCash ? 'Solde saisi' : 'Valeur saisie'}</span> : <div className="price-input-wrapper">
                                                 <input
                                                     className="price-input"
                                                     type="number"
@@ -305,18 +365,20 @@ export default function PositionsView({
                                                     placeholder="0.00"
                                                     title={`Modifiez le cours en ${pos.currency}`}
                                                 />
-                                            </div>
+                                            </div>}
                                         </td>
                                         <td className="text-right font-mono font-bold">
                                             {formatCurrency(pos.marketValueNative, pos.currency)}
                                         </td>
                                         <td className="text-right">
-                                            <div className={`pnl-badge ${isPos ? 'pos' : 'neg'}`}>
-                                                {formatCurrency(pos.unrealizedPnLNative, pos.currency)}
-                                            </div>
-                                            <div className={`pnl-sub ${isPos ? 'pos' : 'neg'}`}>
-                                                {formatPercent(pos.unrealizedPctNative, true)}
-                                            </div>
+                                            {isManualCash ? <span className="manual-position-note">—</span> : <>
+                                                <div className={`pnl-badge ${isPos ? 'pos' : 'neg'}`}>
+                                                    {formatCurrency(pos.unrealizedPnLNative, pos.currency)}
+                                                </div>
+                                                <div className={`pnl-sub ${isPos ? 'pos' : 'neg'}`}>
+                                                    {formatPercent(pos.unrealizedPctNative, true)}
+                                                </div>
+                                            </>}
                                         </td>
                                         <td className="text-right">
                                             <div className="weight-cell">
@@ -332,7 +394,7 @@ export default function PositionsView({
                                             </div>
                                         </td>
                                         <td className="text-center">
-                                            <div className="action-btn-group">
+                                            {isManualPosition ? <span className="manual-position-note">{isManualCash ? 'Modifiable dans Livret A & LEP' : 'Modifiable au tableau de bord'}</span> : <div className="action-btn-group">
                                                 <button
                                                     type="button"
                                                     className="icon-action-btn buy"
@@ -368,7 +430,7 @@ export default function PositionsView({
                                                     <MinusCircle size={15} />
                                                     <span>Vente</span>
                                                 </button>
-                                            </div>
+                                            </div>}
                                         </td>
                                     </tr>
                                 )

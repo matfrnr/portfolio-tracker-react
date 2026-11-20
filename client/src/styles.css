@@ -2057,6 +2057,45 @@ button, input, select, textarea {
 .performance-history-note { margin: 0.15rem 0 0; color: var(--text-muted); font-size: 0.73rem; line-height: 1.5; }
 .performance-history-warning { margin: 0.5rem 0 0.85rem; padding: 0.65rem 0.8rem; border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent); border-radius: 0.6rem; background: var(--color-danger-bg); color: var(--color-danger); font-size: 0.78rem; line-height: 1.5; }
 .performance-history-warning code { overflow-wrap: anywhere; font-size: 0.72rem; }
+.performance-history-baseline-note { margin: 0.55rem 0 0.85rem; padding: 0.65rem 0.8rem; border: 1px solid var(--border-subtle); border-radius: 0.6rem; background: var(--surface-subtle); color: var(--text-secondary); font-size: 0.78rem; line-height: 1.5; }
+.savings-dashboard-grid { grid-template-columns: 1fr; }
+.savings-updated-at { color: var(--text-muted); font-size: 0.75rem; }
+.savings-editor-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 1rem; margin-top: 1rem; }
+.savings-editor-form .form-field { margin: 0; }
+.savings-editor-form .form-field > span { display: block; margin-bottom: 0.4rem; color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; }
+.savings-invested-preview { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.7rem 0.85rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-subtle); }
+.savings-invested-preview span { color: var(--text-muted); font-size: 0.75rem; }
+.savings-invested-preview strong { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.savings-save-button { min-height: 42px; justify-content: center; }
+.savings-editor-feedback { margin: 0.75rem 0 0; font-size: 0.8rem; }
+.savings-editor-feedback.error { color: var(--color-danger); }
+.savings-editor-feedback.success { color: var(--color-success, #059669); }
+.manual-cash-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 1rem; margin-top: 1rem; }
+.manual-cash-form .form-field { margin: 0; }
+.manual-cash-form .form-field > span { display: block; margin-bottom: 0.4rem; color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; }
+.manual-cash-total { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.7rem 0.85rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-subtle); }
+.manual-cash-total span { color: var(--text-muted); font-size: 0.75rem; }
+.manual-cash-total strong { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.manual-cash-position-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.85rem; margin-top: 0.7rem; }
+.manual-cash-position-summary > div { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.9rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-subtle); }
+.manual-cash-position-summary span { color: var(--text-muted); font-size: 0.76rem; }
+.manual-cash-position-summary strong { color: var(--text-primary); font-size: 1rem; font-variant-numeric: tabular-nums; }
+.manual-cash-position-summary .manual-cash-position-total { grid-column: 1 / -1; background: var(--surface-card); }
+.manual-cash-position-summary p { grid-column: 1 / -1; margin: 0; color: var(--text-muted); font-size: 0.78rem; }
+.manual-position-note { color: var(--text-muted); font-size: 0.72rem; }
+.savings-position-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.85rem; margin-top: 0.7rem; }
+.savings-position-summary > div { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.9rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-subtle); }
+.savings-position-summary span { color: var(--text-muted); font-size: 0.76rem; }
+.savings-position-summary strong { color: var(--text-primary); font-size: 1rem; font-variant-numeric: tabular-nums; }
+.savings-position-summary p { grid-column: 1 / -1; margin: 0; color: var(--text-muted); font-size: 0.78rem; }
+
+@media (max-width: 640px) {
+  .savings-editor-form { grid-template-columns: 1fr; }
+  .manual-cash-form { grid-template-columns: 1fr; }
+  .savings-updated-at { display: block; margin-top: 0.35rem; }
+  .savings-position-summary { grid-template-columns: 1fr; }
+  .manual-cash-position-summary { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 900px) {
   .allocation-list { grid-template-columns: 1fr; }

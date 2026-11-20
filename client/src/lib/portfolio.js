@@ -1,5 +1,12 @@
 const EPSILON = 1e-6
 
+export const MANUAL_SAVINGS_TICKER = 'EPARGNE_SALARIALE'
+export const MANUAL_CASH_ACCOUNTS_KEY = 'LIVRETS_LIQUIDITES'
+export const MANUAL_CASH_ASSETS = [
+    { key: 'livretA', ticker: 'CASH_LIVRET_A', name: 'Livret A' },
+    { key: 'lep', ticker: 'CASH_LEP', name: 'LEP' },
+]
+
 export function isCryptoTicker(ticker, name = '') {
     const symbol = String(ticker || '').toUpperCase()
     const label = String(name || '').toLowerCase()

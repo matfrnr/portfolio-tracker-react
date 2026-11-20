@@ -13,6 +13,8 @@ import {
 import { formatCurrency, formatPercent, formatAssetName, exchangeRateFor, isCryptoTicker } from '../lib/portfolio'
 import { fetchDividends } from '../api/prices'
 import PerformanceHistory from './PerformanceHistory'
+import SavingsPortfolioEditor from './SavingsPortfolioEditor'
+import ManualCashEditor from './ManualCashEditor'
 import {
     PieChart as PieIcon,
     BarChart3,
@@ -99,17 +101,18 @@ function AssetAxisTick({ x, y, payload, data }) {
     )
 }
 
-export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.085 }, assetMetadata = {}, portfolioScope = 'stocks', performanceSaveError = null }) {
+export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.085 }, assetMetadata = {}, portfolioScope = 'stocks', trackingStartedAt = null, savingsData = {}, onSavingsSave, cashData = {}, onCashSave, performanceSaveError = null }) {
     const [dividendRates, setDividendRates] = useState({})
     const [allocationMode, setAllocationMode] = useState('asset')
-    const { positions, invested, currentValue, unrealizedPnL, realizedPnL, dividendsNet, dataIssues, dataWarnings, topPerformer, worstPerformer } =
+    const { positions, invested, currentValue, cashValue = 0, unrealizedPnL, realizedPnL, dividendsNet, dataIssues, dataWarnings, topPerformer, worstPerformer } =
         snapshot
-    const visibleAllocationMode = portfolioScope === 'crypto' ? 'asset' : allocationMode
+    const visibleAllocationMode = ['crypto', 'savings', 'cash'].includes(portfolioScope) ? 'asset' : allocationMode
     const dividendPositions = useMemo(() => positions.filter((position) => {
+        if (position.isManualSavings || position.isManualCash) return false
         const type = assetMetadata[position.ticker]?.portfolioType || (isCryptoTicker(position.ticker, position.name) ? 'crypto' : 'stocks')
         return type !== 'crypto'
     }), [positions, assetMetadata])
-    const showDividendSummary = portfolioScope !== 'crypto' && (portfolioScope === 'stocks' || dividendPositions.length > 0)
+    const showDividendSummary = portfolioScope === 'stocks' || (portfolioScope === 'all' && dividendPositions.length > 0)
 
     const allocationData = useMemo(() => {
         const groups = new Map()
@@ -117,16 +120,18 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
             const classification = ASSET_CLASSIFICATION[position.ticker] || {}
             const metadata = assetMetadata[position.ticker] || {}
             const isCrypto = metadata.portfolioType === 'crypto' || (!metadata.portfolioType && isCryptoTicker(position.ticker, position.name))
+            const isSavings = Boolean(position.isManualSavings)
+            const isManualCash = Boolean(position.isManualCash)
             const sector = String(metadata.sector || '').trim()
             const country = String(metadata.country || '').trim()
             const label = visibleAllocationMode === 'asset'
                 ? formatAssetName(position.name, position.ticker)
                 : visibleAllocationMode === 'sector'
-                    ? (isCrypto ? 'Cryptomonnaies' : sector || classification.sector || 'À classer')
-                    : (isCrypto ? 'Non applicable' : country || classification.country || 'À classer')
+                    ? (isCrypto ? 'Cryptomonnaies' : isSavings ? 'Épargne salariale' : isManualCash ? 'Livrets' : sector || classification.sector || 'À classer')
+                    : (isCrypto || isSavings || isManualCash ? 'Non applicable' : country || classification.country || 'À classer')
             const existing = groups.get(label) || { label, marketValue: 0, tickers: [], companies: [], color: PALETTE[groups.size % PALETTE.length] }
             existing.marketValue += Number(position.marketValue) || 0
-            existing.tickers.push(position.ticker)
+            existing.tickers.push(position.isManualSavings ? 'Valeur manuelle' : isManualCash ? 'Solde manuel' : position.ticker)
             existing.companies.push(formatAssetName(position.name, position.ticker))
             groups.set(label, existing)
         }
@@ -137,10 +142,10 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
     }, [positions, visibleAllocationMode, assetMetadata])
 
     const pnlData = useMemo(() => {
-        return [...positions]
+        return positions.filter((position) => !position.isManualCash)
             .sort((a, b) => b.unrealizedPnL - a.unrealizedPnL)
             .map((p) => ({
-                ticker: p.ticker,
+                ticker: p.isManualSavings ? 'Épargne salariale' : p.ticker,
                 name: formatAssetName(p.name, p.ticker),
                 unrealizedPnL: Number(p.unrealizedPnL.toFixed(2)),
                 unrealizedPct: p.unrealizedPct,
@@ -155,6 +160,10 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
     useEffect(() => {
         let active = true
         const symbols = dividendPositions.map((position) => position.ticker)
+        if (symbols.length === 0) {
+            setDividendRates({})
+            return () => { active = false }
+        }
         fetchDividends(symbols).then((rates) => {
             if (active) setDividendRates(rates || {})
         }).catch(() => {
@@ -180,9 +189,24 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
     const dividendTotal = dividendForecast.reduce((sum, item) => sum + item.amountEUR, 0)
     const maxDividend = Math.max(...dividendForecast.map((item) => item.amountEUR), 0)
 
+    if (portfolioScope === 'savings') {
+        return (
+            <div className="dashboard-grid savings-dashboard-grid">
+                <SavingsPortfolioEditor values={savingsData} onSave={onSavingsSave} />
+            </div>
+        )
+    }
+    if (portfolioScope === 'cash') {
+        return (
+            <div className="dashboard-grid savings-dashboard-grid">
+                <ManualCashEditor values={cashData} onSave={onCashSave} />
+            </div>
+        )
+    }
+
     return (
         <div className="dashboard-grid">
-            <PerformanceHistory scope={portfolioScope} snapshot={snapshot} saveError={performanceSaveError} />
+            <PerformanceHistory scope={portfolioScope} snapshot={snapshot} trackingStartedAt={trackingStartedAt} saveError={performanceSaveError} />
             {showDividendSummary && <div className="card dashboard-card full-span dividend-forecast-card">
                 <div className="card-header-flex">
                     <div>
@@ -230,7 +254,7 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
                         <h3 className="card-title"><PieIcon size={16} /> {portfolioScope === 'crypto' ? 'Répartition des cryptomonnaies' : 'Répartition du portefeuille'}</h3>
                         <p className="card-subtitle">Exposition calculée selon la valeur actuelle des positions</p>
                     </div>
-                    {portfolioScope !== 'crypto' && <div className="allocation-switch" role="tablist" aria-label="Type de répartition">
+                    {!['crypto', 'savings', 'cash'].includes(portfolioScope) && <div className="allocation-switch" role="tablist" aria-label="Type de répartition">
                         {[
                             ['asset', 'Par titre'],
                             ['sector', 'Par secteur'],
@@ -280,9 +304,9 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
                     </div>
                 </div>
 
-                {positions.length === 0 ? (
+                {pnlData.length === 0 ? (
                     <div className="empty-state chart-empty">
-                        <p>Ajoutez des transactions pour comparer les performances de vos positions.</p>
+                        <p>Aucun actif avec une performance suivie à afficher.</p>
                     </div>
                 ) : (
                     <div style={{ width: '100%', height: Math.min(620, Math.max(300, pnlData.length * 34)), marginTop: '1rem' }}>
@@ -332,7 +356,7 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
                         <div>
                             <span className="stat-label">Valeur actuelle</span>
                             <div className="stat-val">{formatCurrency(currentValue)}</div>
-                            <span className="stat-desc">Valorisation au cours du marché</span>
+                            <span className="stat-desc">{cashValue > 0 ? 'Cours de marché et livrets saisis' : 'Valorisation au cours du marché'}</span>
                         </div>
                     </div>
 
@@ -385,7 +409,7 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
                                 {topPerformer ? formatAssetName(topPerformer.name, topPerformer.ticker) : '—'}
                             </div>
                             <span className="stat-desc text-success">
-                                {topPerformer ? `${topPerformer.ticker} · ${formatPercent(topPerformer.unrealizedPct, true)}` : 'Aucun titre'}
+                                {topPerformer ? `${topPerformer.isManualSavings ? 'Valeur saisie' : topPerformer.ticker} · ${formatPercent(topPerformer.unrealizedPct, true)}` : 'Aucun titre'}
                             </span>
                         </div>
                     </div>
@@ -400,7 +424,7 @@ export default function DashboardView({ snapshot, forexRates = { EUR: 1, USD: 1.
                                 {worstPerformer ? formatAssetName(worstPerformer.name, worstPerformer.ticker) : '—'}
                             </div>
                             <span className="stat-desc text-danger">
-                                {worstPerformer ? `${worstPerformer.ticker} · ${formatPercent(worstPerformer.unrealizedPct, true)}` : 'Aucun titre'}
+                                {worstPerformer ? `${worstPerformer.isManualSavings ? 'Valeur saisie' : worstPerformer.ticker} · ${formatPercent(worstPerformer.unrealizedPct, true)}` : 'Aucun titre'}
                             </span>
                         </div>
                     </div>

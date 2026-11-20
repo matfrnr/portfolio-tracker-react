@@ -5,17 +5,20 @@ import {
     History,
 } from 'lucide-react'
 
-export default function Tabs({ currentTab, onChange, positionsCount = 0 }) {
+export default function Tabs({ currentTab, onChange, positionsCount = 0, portfolioScope = 'stocks' }) {
     const tabs = [
         { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
         { id: 'positions', label: 'Positions', icon: Briefcase, count: positionsCount },
         { id: 'transaction', label: 'Nouvelle transaction', icon: PlusCircle },
         { id: 'history', label: 'Historique', icon: History },
     ]
+    const visibleTabs = ['savings', 'cash'].includes(portfolioScope)
+        ? tabs.filter(({ id }) => ['dashboard', 'positions'].includes(id))
+        : tabs
 
     return (
         <div className="nav-tabs" role="tablist" aria-label="Navigation du portefeuille">
-            {tabs.map(({ id, label, icon: Icon, count }) => {
+            {visibleTabs.map(({ id, label, icon: Icon, count }) => {
                 const isActive = currentTab === id
                 return (
                     <button

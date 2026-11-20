@@ -52,7 +52,7 @@ function PerformanceTooltip({ active, payload, label }) {
     )
 }
 
-export default function PerformanceHistory({ scope, snapshot, saveError = null }) {
+export default function PerformanceHistory({ scope, snapshot, trackingStartedAt = null, saveError = null }) {
     const [period, setPeriod] = useState('30d')
     const [savedSnapshots, setSavedSnapshots] = useState([])
     const [loading, setLoading] = useState(true)
@@ -77,7 +77,7 @@ export default function PerformanceHistory({ scope, snapshot, saveError = null }
     const allSnapshots = useMemo(() => {
         const today = localDateKey(new Date())
         const byDate = new Map(savedSnapshots.map((item) => [item.date, item]))
-        if (snapshot?.transactionCount > 0) {
+        if (snapshot?.positions?.length > 0) {
             byDate.set(today, {
                 date: today,
                 currentValue: snapshot.currentValue,
@@ -87,17 +87,27 @@ export default function PerformanceHistory({ scope, snapshot, saveError = null }
                 dividendsNet: snapshot.dividendsNet,
                 totalPnL: snapshot.totalPnL,
                 transactionCount: snapshot.transactionCount,
+                updatedAt: new Date().toISOString(),
             })
         }
         return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
     }, [savedSnapshots, snapshot])
 
+    const historySnapshots = useMemo(() => {
+        if (!['all', 'crypto', 'savings'].includes(scope) || !trackingStartedAt || allSnapshots.length === 0) return allSnapshots
+        const trackingStart = new Date(trackingStartedAt).getTime()
+        if (!Number.isFinite(trackingStart)) return allSnapshots
+        const firstTrackedSnapshot = allSnapshots.find((item) => new Date(item.updatedAt || 0).getTime() >= trackingStart)
+        const firstTrackedDate = firstTrackedSnapshot?.date || localDateKey(new Date(trackingStart))
+        return allSnapshots.filter((item) => item.date >= firstTrackedDate)
+    }, [allSnapshots, scope, trackingStartedAt])
+
     const visibleSnapshots = useMemo(() => {
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         const start = periodStart(period, today)
-        return allSnapshots.filter((item) => !start || parseLocalDate(item.date) >= start)
-    }, [allSnapshots, period])
+        return historySnapshots.filter((item) => !start || parseLocalDate(item.date) >= start)
+    }, [historySnapshots, period])
 
     const chartData = useMemo(() => {
         if (visibleSnapshots.length < 2) return visibleSnapshots
@@ -121,6 +131,24 @@ export default function PerformanceHistory({ scope, snapshot, saveError = null }
         ? periodChange / firstSnapshot.unrealizedPnL * 100
         : null
     const anyError = saveError || loadError
+    const historyWasReset = historySnapshots.length < allSnapshots.length
+    const trackingDate = historySnapshots[0]?.date
+        ? parseLocalDate(historySnapshots[0].date).toLocaleDateString('fr-FR')
+        : trackingStartedAt
+            ? new Date(trackingStartedAt).toLocaleDateString('fr-FR')
+            : null
+    const subportfolioHistory = scope === 'crypto' || scope === 'savings' || (scope === 'all' && Boolean(trackingStartedAt))
+    const chartDomain = useMemo(() => {
+        if (!subportfolioHistory || visibleSnapshots.length === 0) return ['auto', 'auto']
+        const values = visibleSnapshots.map((item) => Number(item.unrealizedPnL)).filter(Number.isFinite)
+        if (values.length === 0) return ['auto', 'auto']
+        const min = Math.min(...values)
+        const max = Math.max(...values)
+        const range = max - min
+        const padding = range > 0 ? range * 0.12 : Math.max(Math.abs(min) * 0.08, 25)
+        return [min - padding, max + padding]
+    }, [subportfolioHistory, visibleSnapshots])
+    const showZeroReference = !subportfolioHistory || (chartDomain[0] <= 0 && chartDomain[1] >= 0)
 
     return (
         <section className="card dashboard-card full-span performance-history-card" aria-labelledby="performance-history-title">
@@ -142,10 +170,20 @@ export default function PerformanceHistory({ scope, snapshot, saveError = null }
                 </div>
             )}
 
+            {trackingDate && (scope === 'crypto' || scope === 'savings' || (scope === 'all' && historyWasReset)) && (
+                <div className="performance-history-baseline-note" role="status">
+                    {scope === 'all'
+                        ? `L’historique « Tout » repart du ${trackingDate}, premier relevé incluant les sous-portefeuilles ajoutés. Les relevés précédents sont masqués pour éviter une fausse variation.`
+                        : scope === 'crypto'
+                            ? `L’historique crypto commence au premier relevé du ${trackingDate}. Les achats antérieurs servent au calcul du PRU, mais ne recréent pas de relevés passés.`
+                            : `L’historique de l’épargne salariale commence au premier relevé du ${trackingDate}.`}
+                </div>
+            )}
+
             {loading ? (
                 <div className="performance-history-empty">Chargement des relevés…</div>
             ) : visibleSnapshots.length === 0 ? (
-                <div className="performance-history-empty">Ajoute des transactions pour commencer l’historique.</div>
+                <div className="performance-history-empty">{scope === 'savings' ? 'Renseigne ton solde pour commencer l’historique.' : 'Ajoute des transactions pour commencer l’historique.'}</div>
             ) : (
                 <>
                     <div className="performance-history-summary">
@@ -176,6 +214,7 @@ export default function PerformanceHistory({ scope, snapshot, saveError = null }
                                     minTickGap={28}
                                 />
                                 <YAxis
+                                    domain={chartDomain}
                                     width={76}
                                     tickFormatter={(value) => formatCurrency(value, 'EUR')}
                                     tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
@@ -183,7 +222,7 @@ export default function PerformanceHistory({ scope, snapshot, saveError = null }
                                     tickLine={false}
                                 />
                                 <Tooltip content={<PerformanceTooltip />} />
-                                <ReferenceLine y={0} stroke="var(--border-strong)" strokeDasharray="4 4" />
+                                {showZeroReference && <ReferenceLine y={0} stroke="var(--border-strong)" strokeDasharray="4 4" />}
                                 <Line
                                     type="linear"
                                     dataKey="unrealizedPnL"

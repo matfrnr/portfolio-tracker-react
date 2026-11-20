@@ -6,7 +6,7 @@ import { savePerformanceSnapshot } from './api/snapshots'
 import PositionsView from './components/PositionsView'
 import TransactionView from './components/TransactionView'
 import HistoryView from './components/HistoryView'
-import { computePortfolio, validateTransaction, validateTransactionHistory, uid, parseNumber, formatCurrency, formatDateFR, formatQty, defaultCurrencyForTicker, isCryptoTicker } from './lib/portfolio'
+import { computePortfolio, validateTransaction, validateTransactionHistory, uid, parseNumber, formatCurrency, formatDateFR, formatQty, defaultCurrencyForTicker, isCryptoTicker, MANUAL_SAVINGS_TICKER, MANUAL_CASH_ACCOUNTS_KEY, MANUAL_CASH_ASSETS } from './lib/portfolio'
 import { exportPortfolioJSON, importPortfolioJSON } from './lib/storage'
 import { parsePortfolioCSV, downloadPortfolioCSVTemplate } from './lib/portfolioCsv'
 import { getPortfolioSettings, savePortfolioSettings } from './api/settings'
@@ -185,6 +185,32 @@ export default function App({ user = null, onSignOut }) {
         setAssetMetadata((current) => ({
             ...current,
             [symbol]: { ...(current[symbol] || {}), ...updates },
+        }))
+    }
+
+    function updateManualSavings(updates) {
+        setAssetMetadata((current) => {
+            const existing = current[MANUAL_SAVINGS_TICKER] || {}
+            const now = updates.updatedAt || new Date().toISOString()
+            const trackingStartedAt = existing.trackingStartedAt || (Number(updates.currentValue) > 0 ? now : null)
+            return {
+                ...current,
+                [MANUAL_SAVINGS_TICKER]: {
+                    ...existing,
+                    ...updates,
+                    ...(trackingStartedAt ? { trackingStartedAt } : {}),
+                },
+            }
+        })
+    }
+
+    function updateManualCashBalances(updates) {
+        setAssetMetadata((current) => ({
+            ...current,
+            [MANUAL_CASH_ACCOUNTS_KEY]: {
+                ...(current[MANUAL_CASH_ACCOUNTS_KEY] || {}),
+                ...updates,
+            },
         }))
     }
 
@@ -369,10 +395,36 @@ export default function App({ user = null, onSignOut }) {
         return portfolioScope === 'all' || type === portfolioScope
     }), [transactions, assetMetadata, portfolioScope])
 
+    const cryptoTrackingStartedAt = useMemo(() => {
+        const timestamps = transactions
+            .filter((tx) => {
+                const type = assetMetadata[tx.ticker]?.portfolioType
+                return type === 'crypto' || (!type && isCryptoTicker(tx.ticker, tx.name))
+            })
+            .map((tx) => new Date(tx.createdAt || 0).getTime())
+            .filter((timestamp) => Number.isFinite(timestamp) && timestamp > 0)
+        return timestamps.length ? new Date(Math.min(...timestamps)).toISOString() : null
+    }, [transactions, assetMetadata])
+    const savingsTrackingStartedAt = assetMetadata[MANUAL_SAVINGS_TICKER]?.trackingStartedAt || null
+    const combinedTrackingStartedAt = useMemo(() => {
+        const timestamps = [cryptoTrackingStartedAt, savingsTrackingStartedAt]
+            .map((value) => new Date(value || 0).getTime())
+            .filter((timestamp) => Number.isFinite(timestamp) && timestamp > 0)
+        return timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null
+    }, [cryptoTrackingStartedAt, savingsTrackingStartedAt])
+    const performanceTrackingStartedAt = portfolioScope === 'crypto'
+        ? cryptoTrackingStartedAt
+        : portfolioScope === 'savings'
+            ? savingsTrackingStartedAt
+            : portfolioScope === 'all'
+                ? combinedTrackingStartedAt
+                : null
+
     // Calcul du portefeuille pour le périmètre sélectionné.
     const snapshot = useMemo(() => {
         try {
-            const base = computePortfolio(scopedTransactions, prices, currencies, forexRates)
+            const baseTransactions = ['savings', 'cash'].includes(portfolioScope) ? [] : scopedTransactions
+            const base = computePortfolio(baseTransactions, prices, currencies, forexRates)
             const positions = base.positions.map((position) => {
                 const override = Number(assetMetadata[position.ticker]?.pruOverride)
                 if (!(override > 0) || Math.abs(override - position.averageCost) < 1e-9) return position
@@ -383,10 +435,99 @@ export default function App({ user = null, onSignOut }) {
                 const unrealizedPnLNative = position.marketValueNative - costBasisNative
                 return { ...position, averageCost: override, costBasisNative, costBasis, averageCostEUR: costBasis / position.quantity, unrealizedPnL, unrealizedPnLNative, unrealizedPct: costBasis > 0 ? unrealizedPnL / costBasis * 100 : 0, unrealizedPctNative: costBasisNative > 0 ? unrealizedPnLNative / costBasisNative * 100 : 0 }
             })
-            const invested = positions.reduce((sum, position) => sum + position.costBasis, 0)
-            const unrealizedPnL = base.currentValue - invested
-            const ranked = [...positions].sort((a, b) => b.unrealizedPct - a.unrealizedPct)
-            return { ...base, positions, invested, unrealizedPnL, unrealizedPct: invested > 0 ? unrealizedPnL / invested * 100 : 0, totalPnL: unrealizedPnL + base.realizedPnL + base.dividendsNet, topPerformer: ranked[0] || null, worstPerformer: ranked[ranked.length - 1] || null }
+            const includeSavings = portfolioScope === 'all' || portfolioScope === 'savings'
+            const includeCash = portfolioScope === 'all' || portfolioScope === 'cash'
+            const savingsSettings = assetMetadata[MANUAL_SAVINGS_TICKER] || {}
+            const savingsValue = Math.max(0, parseNumber(savingsSettings.currentValue, 0))
+            const savingsPnL = Math.min(parseNumber(savingsSettings.unrealizedPnL, 0), savingsValue)
+            const savingsInvested = savingsValue - savingsPnL
+            if (includeSavings && (savingsValue > 0 || savingsSettings.trackingStartedAt)) {
+                const savingsReturn = savingsInvested > 0 ? savingsPnL / savingsInvested * 100 : 0
+                positions.push({
+                    ticker: MANUAL_SAVINGS_TICKER,
+                    name: 'Épargne salariale',
+                    currency: 'EUR',
+                    currencyWasExplicit: true,
+                    quantity: 1,
+                    currentPrice: savingsValue,
+                    currentPriceEUR: savingsValue,
+                    hasLivePrice: false,
+                    averageCost: savingsInvested,
+                    averageCostEUR: savingsInvested,
+                    costBasis: savingsInvested,
+                    costBasisNative: savingsInvested,
+                    marketValue: savingsValue,
+                    marketValueNative: savingsValue,
+                    unrealizedPnL: savingsPnL,
+                    unrealizedPnLNative: savingsPnL,
+                    unrealizedPct: savingsReturn,
+                    unrealizedPctNative: savingsReturn,
+                    isManualSavings: true,
+                })
+            }
+            const cashSettings = assetMetadata[MANUAL_CASH_ACCOUNTS_KEY] || {}
+            const cashPositions = includeCash ? MANUAL_CASH_ASSETS.flatMap((asset) => {
+                const rawBalance = cashSettings[asset.key]
+                const balance = Math.max(0, parseNumber(rawBalance, 0))
+                if (balance <= 0) return []
+                return [{
+                    ticker: asset.ticker,
+                    name: asset.name,
+                    currency: 'EUR',
+                    currencyWasExplicit: true,
+                    quantity: 1,
+                    currentPrice: balance,
+                    currentPriceEUR: balance,
+                    hasLivePrice: false,
+                    averageCost: 0,
+                    averageCostEUR: 0,
+                    costBasis: 0,
+                    costBasisNative: 0,
+                    marketValue: balance,
+                    marketValueNative: balance,
+                    unrealizedPnL: 0,
+                    unrealizedPnLNative: 0,
+                    unrealizedPct: 0,
+                    unrealizedPctNative: 0,
+                    isManualCash: true,
+                }]
+            }) : []
+            positions.push(...cashPositions)
+            const currentValue = positions.reduce((sum, position) => sum + position.marketValue, 0)
+            const investmentPositions = positions.filter((position) => !position.isManualCash)
+            const invested = investmentPositions.reduce((sum, position) => sum + position.costBasis, 0)
+            const unrealizedPnL = investmentPositions.reduce((sum, position) => sum + position.unrealizedPnL, 0)
+            const cashValue = cashPositions.reduce((sum, position) => sum + position.marketValue, 0)
+            const realizedPnL = base.realizedPnL
+            const dividendsNet = base.dividendsNet
+            const totalPnL = unrealizedPnL + realizedPnL + dividendsNet
+            const totalBought = base.totalBought + (includeSavings ? savingsInvested : 0)
+            const totalsByCurrency = new Map()
+            for (const position of positions) {
+                totalsByCurrency.set(position.currency, (totalsByCurrency.get(position.currency) || 0) + position.marketValueNative)
+            }
+            const normalizedPositions = positions.map((position) => ({
+                ...position,
+                allocationWeight: (totalsByCurrency.get(position.currency) || 0) > 0 ? position.marketValueNative / totalsByCurrency.get(position.currency) * 100 : 0,
+                allocationWeightEUR: currentValue > 0 ? position.marketValue / currentValue * 100 : 0,
+            }))
+            const ranked = normalizedPositions.filter((position) => !position.isManualCash).sort((a, b) => b.unrealizedPct - a.unrealizedPct)
+            return {
+                ...base,
+                positions: normalizedPositions,
+                currentValue,
+                cashValue,
+                invested,
+                unrealizedPnL,
+                unrealizedPct: invested > 0 ? unrealizedPnL / invested * 100 : 0,
+                totalBought,
+                totalPnL,
+                totalPnLPct: totalBought > 0 ? totalPnL / totalBought * 100 : 0,
+                realizedPnL,
+                dividendsNet,
+                topPerformer: ranked[0] || null,
+                worstPerformer: ranked[ranked.length - 1] || null,
+            }
         } catch (err) {
             console.error('Erreur calcul portefeuille:', err)
             return {
@@ -394,11 +535,11 @@ export default function App({ user = null, onSignOut }) {
                 transactionCount: scopedTransactions.length,
             }
         }
-    }, [scopedTransactions, prices, currencies, forexRates, assetMetadata])
+    }, [scopedTransactions, prices, currencies, forexRates, assetMetadata, portfolioScope])
 
     // Conserve le dernier état constaté de chaque journée pour le périmètre affiché.
     useEffect(() => {
-        if (loading || isOffline || isRefreshing || !settingsReady || snapshot.transactionCount <= 0) return undefined
+        if (loading || isOffline || isRefreshing || !settingsReady || ['savings', 'cash'].includes(portfolioScope) || snapshot.positions.length <= 0) return undefined
         const timeout = setTimeout(() => {
             savePerformanceSnapshot(portfolioScope, snapshot).then(() => {
                 setSnapshotSaveError('')
@@ -408,7 +549,7 @@ export default function App({ user = null, onSignOut }) {
             })
         }, 800)
         return () => clearTimeout(timeout)
-    }, [loading, isOffline, isRefreshing, settingsReady, portfolioScope, snapshot.transactionCount, snapshot.currentValue, snapshot.invested, snapshot.realizedPnL, snapshot.unrealizedPnL, snapshot.dividendsNet, snapshot.totalPnL])
+    }, [loading, isOffline, isRefreshing, settingsReady, portfolioScope, snapshot.positions.length, snapshot.transactionCount, snapshot.currentValue, snapshot.invested, snapshot.realizedPnL, snapshot.unrealizedPnL, snapshot.dividendsNet, snapshot.totalPnL])
 
     const importHistoryIssues = useMemo(() => {
         if (!importPreview) return []
@@ -637,7 +778,12 @@ export default function App({ user = null, onSignOut }) {
             return
         }
         const replace = importMode === 'replace'
-        const sourceTransactions = importPreview.transactions.map((tx) => ({ ...tx, id: tx.id || uid() }))
+        const importedAt = new Date().toISOString()
+        const sourceTransactions = importPreview.transactions.map((tx) => ({
+            ...tx,
+            id: tx.id || uid(),
+            createdAt: tx.createdAt || importedAt,
+        }))
         const merged = replace ? [...sourceTransactions] : (() => {
             const byId = new Map(transactions.map((tx) => [tx.id, tx]))
             for (const tx of sourceTransactions) byId.set(tx.id || uid(), tx)
@@ -795,14 +941,21 @@ export default function App({ user = null, onSignOut }) {
                 <div className="portfolio-navigation-row">
                     <Tabs
                         currentTab={currentTab}
-                        onChange={setCurrentTab}
+                        onChange={(tab) => setCurrentTab(['savings', 'cash'].includes(portfolioScope) && ['transaction', 'history'].includes(tab) ? 'dashboard' : tab)}
                         positionsCount={snapshot.positions.length}
+                        portfolioScope={portfolioScope}
                     />
                     <div className="portfolio-scope-control">
                         <label htmlFor="portfolio-scope">Portefeuille</label>
-                        <select id="portfolio-scope" value={portfolioScope} onChange={(event) => setPortfolioScope(event.target.value)}>
+                        <select id="portfolio-scope" value={portfolioScope} onChange={(event) => {
+                            const nextScope = event.target.value
+                            setPortfolioScope(nextScope)
+                            if (['savings', 'cash'].includes(nextScope)) setCurrentTab('dashboard')
+                        }}>
                             <option value="stocks">Bourse</option>
                             <option value="crypto">Cryptomonnaies</option>
+                            <option value="savings">Épargne salariale</option>
+                            <option value="cash">Livrets</option>
                             <option value="all">Tout</option>
                         </select>
                     </div>
@@ -817,8 +970,19 @@ export default function App({ user = null, onSignOut }) {
                     <>
                         {/* Vue 1 : Tableau de bord */}
                         <div className={currentTab === 'dashboard' ? 'tab-view active' : 'tab-view'}>
-                            <KpiRow snapshot={snapshot} />
-                            <DashboardView snapshot={snapshot} forexRates={forexRates} assetMetadata={assetMetadata} portfolioScope={portfolioScope} performanceSaveError={snapshotSaveError} />
+                            {portfolioScope !== 'cash' && <KpiRow snapshot={snapshot} portfolioScope={portfolioScope} />}
+                            <DashboardView
+                                snapshot={snapshot}
+                                forexRates={forexRates}
+                                assetMetadata={assetMetadata}
+                                portfolioScope={portfolioScope}
+                                trackingStartedAt={performanceTrackingStartedAt}
+                                savingsData={assetMetadata[MANUAL_SAVINGS_TICKER] || {}}
+                                onSavingsSave={updateManualSavings}
+                                cashData={assetMetadata[MANUAL_CASH_ACCOUNTS_KEY] || {}}
+                                onCashSave={updateManualCashBalances}
+                                performanceSaveError={snapshotSaveError}
+                            />
                         </div>
 
                         {/* Vue 2 : Positions */}
@@ -834,6 +998,8 @@ export default function App({ user = null, onSignOut }) {
                                 forexRates={forexRates}
                                 assetMetadata={assetMetadata}
                                 onAssetMetadataChange={updateAssetMetadata}
+                                portfolioScope={portfolioScope}
+                                cashData={assetMetadata[MANUAL_CASH_ACCOUNTS_KEY] || {}}
                                 tagCatalog={tagCatalog}
                                 onTagCatalogChange={setTagCatalog}
                             />
