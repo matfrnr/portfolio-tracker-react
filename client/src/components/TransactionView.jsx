@@ -36,6 +36,79 @@ const emptyForm = {
     note: '',
 }
 
+const EXCHANGE_LABELS = {
+    NMS: 'Nasdaq',
+    NGM: 'Nasdaq',
+    NCM: 'Nasdaq',
+    NYQ: 'New York (NYSE)',
+    PAR: 'Euronext Paris',
+    GER: 'Francfort (Xetra)',
+    FRA: 'Francfort',
+    LSE: 'Londres',
+    AMS: 'Amsterdam',
+    MIL: 'Milan',
+    MCE: 'Madrid',
+    EBS: 'Zurich',
+    BRU: 'Bruxelles',
+    STO: 'Stockholm',
+    CPH: 'Copenhague',
+    HEL: 'Helsinki',
+    OSL: 'Oslo',
+    ASX: 'Australie',
+    TOR: 'Toronto',
+    HKG: 'Hong Kong',
+    JPX: 'Tokyo',
+}
+
+const QUOTE_TYPE_LABELS = {
+    EQUITY: 'Action',
+    ETF: 'ETF',
+    MUTUALFUND: 'Fonds',
+    CRYPTOCURRENCY: 'Crypto',
+    INDEX: 'Indice',
+    CURRENCY: 'Devise',
+    FUTURE: 'Contrat à terme',
+}
+
+function exchangeLabel(exchange) {
+    return EXCHANGE_LABELS[exchange] || exchange || 'Place non précisée'
+}
+
+function issuerKey(name = '') {
+    const suffixes = new Set(['inc', 'incorporated', 'corp', 'corporation', 'company', 'co', 'plc', 'sa', 'se', 'ag', 'nv', 'adr', 'class'])
+    const words = String(name)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter((word) => word && !suffixes.has(word))
+
+    // Yahoo ajoute parfois la classe du titre comme suffixe (« Apple Inc. R »).
+    while (words.length > 1 && /^[a-z]$/.test(words[words.length - 1])) words.pop()
+    return words.join(' ')
+}
+
+function prioritizeCurrencyListings(listings) {
+    if (listings.length < 2) return listings
+
+    const primaryIssuer = issuerKey(listings[0].name)
+    if (!primaryIssuer) return listings
+
+    const sameIssuer = listings.filter((item) => issuerKey(item.name) === primaryIssuer)
+    const preferred = ['EUR', 'USD']
+        .map((currency) => sameIssuer.find((item) => item.currency === currency))
+        .filter(Boolean)
+    const selected = new Set(preferred)
+
+    return [
+        ...preferred,
+        ...sameIssuer.filter((item) => !selected.has(item)),
+        ...listings.filter((item) => !sameIssuer.includes(item)),
+    ]
+}
+
 export default function TransactionView({
     onSaveTransaction,
     editingTransaction,
@@ -52,8 +125,11 @@ export default function TransactionView({
     const [suggestions, setSuggestions] = useState([])
     const [isSearching, setIsSearching] = useState(false)
     const [showSuggestions, setShowSuggestions] = useState(false)
+    const [selectedListing, setSelectedListing] = useState(null)
     const searchTimeoutRef = useRef(null)
+    const searchRequestIdRef = useRef(0)
     const suggestionBoxRef = useRef(null)
+    const orderedSuggestions = useMemo(() => prioritizeCurrencyListings(suggestions), [suggestions])
 
     const transactionAssets = useMemo(() => {
         const assets = positions.map((position) => ({
@@ -76,6 +152,7 @@ export default function TransactionView({
     // Charger les données en cas d'édition ou de préremplissage
     useEffect(() => {
         if (editingTransaction) {
+            setSelectedListing(null)
             const editCurrency = editingTransaction.currency || currencies[editingTransaction.ticker] || defaultCurrencyForTicker(editingTransaction.ticker)
             const savedRate = Number(editingTransaction.exchangeRate)
             const hasSavedRate = savedRate > 0 && !(editCurrency === 'USD' && savedRate === 1)
@@ -96,6 +173,7 @@ export default function TransactionView({
                 note: editingTransaction.note || '',
             })
         } else if (prefillData) {
+            setSelectedListing(null)
             const detectedCurr = prefillData.currency || defaultCurrencyForTicker(prefillData.ticker)
             const prefillRate = exchangeRateFor(detectedCurr, forexRates, forexRate)
             setForm({
@@ -111,6 +189,7 @@ export default function TransactionView({
                 date: getTodayISODate(),
             })
         } else {
+            setSelectedListing(null)
             setForm({
                 ...emptyForm,
                 date: getTodayISODate(),
@@ -154,10 +233,21 @@ export default function TransactionView({
     }, [form.quantity, form.unitPrice, form.fees, form.type])
 
     function updateField(name, value) {
-        setForm((current) => ({ ...current, [name]: value }))
+        if (name === 'ticker') {
+            setForm((current) => ({
+                ...current,
+                ticker: value,
+                name: current.ticker === value ? current.name : '',
+            }))
+        } else {
+            setForm((current) => ({ ...current, [name]: value }))
+        }
 
         if (name === 'ticker') {
             const query = value.trim()
+            setSelectedListing(null)
+            setSuggestions([])
+            const requestId = ++searchRequestIdRef.current
             if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current)
             }
@@ -168,11 +258,11 @@ export default function TransactionView({
                 searchTimeoutRef.current = setTimeout(async () => {
                     try {
                         const results = await searchTickers(query)
-                        setSuggestions(results)
+                        if (requestId === searchRequestIdRef.current) setSuggestions(results)
                     } catch (err) {
-                        setSuggestions([])
+                        if (requestId === searchRequestIdRef.current) setSuggestions([])
                     } finally {
-                        setIsSearching(false)
+                        if (requestId === searchRequestIdRef.current) setIsSearching(false)
                     }
                 }, 300)
             } else {
@@ -223,6 +313,9 @@ export default function TransactionView({
 
     async function handleSelectSuggestion(suggestion) {
         const symbol = suggestion.symbol.toUpperCase()
+        searchRequestIdRef.current += 1
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+        setSelectedListing(suggestion)
         setShowSuggestions(false)
         const detectedCurr = suggestion.currency || defaultCurrencyForTicker(symbol)
 
@@ -242,6 +335,7 @@ export default function TransactionView({
             if (quotes[symbol]?.price) {
                 const livePrice = quotes[symbol].price
                 const quoteCurr = quotes[symbol].currency || detectedCurr
+                setSelectedListing((current) => current ? { ...current, currency: quoteCurr, currencyIsEstimated: false } : current)
                 let quoteRate = exchangeRateFor(quoteCurr, forexRates, forexRate)
                 let quoteRateAvailable = quoteCurr === 'EUR' || hasExchangeRate(quoteCurr, forexRates)
                 try {
@@ -395,39 +489,71 @@ export default function TransactionView({
                         <>
                             {/* Recherche d'un nouvel actif pour les achats */}
                             <div className="form-field full-width" ref={suggestionBoxRef} style={{ position: 'relative' }}>
-                                <label>
-                                    Ticker / Symbole boursier <span className="required">*</span>
+                                <label htmlFor="asset-ticker-search">
+                                    Rechercher un actif <span className="required">*</span>
                                 </label>
                                 <div className="input-with-icon">
                                     <Search size={16} className="input-icon" />
                                     <input
+                                        id="asset-ticker-search"
                                         value={form.ticker}
                                         onChange={(e) => updateField('ticker', e.target.value)}
                                         onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                                        placeholder="ex. AAPL, MC.PA, CW8.PA, MSFT, NVDA..."
+                                        placeholder="Nom d'entreprise ou ticker (ex. Microsoft, MSFT, CW8)"
                                         required
                                         autoComplete="off"
                                     />
                                     {isSearching && <span className="input-spinner" />}
                                 </div>
+                                <span className="asset-search-hint">
+                                    Vérifie la place de cotation et la devise avant de choisir, surtout si l'actif existe sur plusieurs marchés.
+                                </span>
 
-                                {showSuggestions && suggestions.length > 0 && (
+                                {showSuggestions && (isSearching || suggestions.length > 0 || form.ticker.trim().length > 0) && (
                                     <div className="suggestions-dropdown">
-                                        {suggestions.map((item) => (
-                                            <div
-                                                key={item.symbol}
+                                        {orderedSuggestions.map((item) => (
+                                            <button
+                                                type="button"
+                                                key={`${item.symbol}-${item.exchange || ''}`}
                                                 className="suggestion-item"
                                                 onClick={() => handleSelectSuggestion(item)}
                                             >
-                                                <div>
-                                                    <span className="suggestion-name">{formatAssetName(item.name, item.symbol)}</span>
-                                                    <span className="suggestion-symbol">{item.symbol}</span>
-                                                </div>
-                                                <span className="suggestion-exchange">
-                                                    {item.currency ? `[${item.currency}] ` : ''}{item.exchange}
+                                                <span className="suggestion-main">
+                                                    <strong className="suggestion-name">{formatAssetName(item.name, item.symbol)}</strong>
+                                                    <span className="suggestion-identifiers">
+                                                        <span className="suggestion-symbol">{item.symbol}</span>
+                                                        {item.type && <span className="suggestion-type">{QUOTE_TYPE_LABELS[item.type] || item.type}</span>}
+                                                    </span>
                                                 </span>
-                                            </div>
+                                                <span className="suggestion-metadata">
+                                                    <span className="suggestion-exchange">{exchangeLabel(item.exchange)}</span>
+                                                    <span className={`suggestion-currency${item.currencyIsEstimated || !item.currency ? ' estimated' : ''}`}>
+                                                        <small>{item.currencyIsEstimated || !item.currency ? 'Devise estimée' : 'Devise'}</small>
+                                                        {item.currency || 'Indisponible'}
+                                                    </span>
+                                                </span>
+                                            </button>
                                         ))}
+                                        {isSearching && <div className="suggestion-message">Recherche des actifs…</div>}
+                                        {!isSearching && suggestions.length === 0 && (
+                                            <div className="suggestion-message">Aucun résultat. Tu peux saisir le ticker manuellement.</div>
+                                        )}
+                                    </div>
+                                )}
+                                {form.ticker && form.name && (
+                                    <div className="asset-selection-summary" aria-live="polite">
+                                        <div className="asset-selection-identity">
+                                            <strong>{formatAssetName(form.name, form.ticker)}</strong>
+                                            <div className="asset-selection-details">
+                                                <span className="suggestion-symbol">{form.ticker}</span>
+                                                {selectedListing?.exchange && <span>{exchangeLabel(selectedListing.exchange)}</span>}
+                                                {selectedListing?.type && <span>{QUOTE_TYPE_LABELS[selectedListing.type] || selectedListing.type}</span>}
+                                            </div>
+                                        </div>
+                                        <div className="asset-selection-currency">
+                                            <small>{selectedListing?.currencyIsEstimated ? 'Devise estimée' : 'Devise de cotation'}</small>
+                                            <strong>{form.currency}</strong>
+                                        </div>
                                     </div>
                                 )}
                             </div>

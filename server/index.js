@@ -54,6 +54,18 @@ function defaultCurrencyForTicker(ticker = "") {
   return "USD";
 }
 
+const CURRENCY_BY_EXCHANGE = {
+  NMS: "USD", NGM: "USD", NCM: "USD", NYQ: "USD", PCX: "USD", ASE: "USD", BTS: "USD",
+  PAR: "EUR", GER: "EUR", FRA: "EUR", AMS: "EUR", BRU: "EUR", MCE: "EUR", MIL: "EUR", VIE: "EUR", HEL: "EUR",
+  LSE: "GBP", EBS: "CHF", SWX: "CHF", TOR: "CAD", VAN: "CAD", ASX: "AUD", JPX: "JPY",
+  STO: "SEK", OSL: "NOK", CPH: "DKK", HKG: "HKD", NZE: "NZD", SGX: "SGD", SAO: "BRL", MEX: "MXN",
+  KSC: "KRW", SHH: "CNY", SHZ: "CNY", TAI: "TWD",
+};
+
+function currencyForExchange(exchange = "") {
+  return CURRENCY_BY_EXCHANGE[String(exchange).trim().toUpperCase()] || null;
+}
+
 async function fetchLiveForexRate(currencies = []) {
   const requested = new Set(["USD", ...currencies.map((value) => String(value).toUpperCase())]);
   const rates = { EUR: 1, ...(cachedForex.rates || {}), USD: cachedForex.EURUSD || 1.085 };
@@ -406,7 +418,7 @@ app.get("/api/quotes/search", async (req, res) => {
     const response = await fetch(
       `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(
         query.trim(),
-      )}&quotesCount=8&newsCount=0`,
+      )}&quotesCount=20&newsCount=0`,
       {
         headers: {
           "User-Agent":
@@ -423,13 +435,17 @@ app.get("/api/quotes/search", async (req, res) => {
     const data = await response.json();
     const quotes = (data.quotes || [])
       .filter((q) => q.symbol && (q.shortname || q.longname))
-      .map((q) => ({
-        symbol: q.symbol,
-        name: q.shortname || q.longname,
-        exchange: q.exchange,
-        type: q.quoteType,
-        currency: q.currency || defaultCurrencyForTicker(q.symbol),
-      }));
+      .map((q) => {
+        const exchangeCurrency = currencyForExchange(q.exchange);
+        return {
+          symbol: q.symbol,
+          name: q.shortname || q.longname,
+          exchange: q.exchange,
+          type: q.quoteType,
+          currency: q.currency || exchangeCurrency || defaultCurrencyForTicker(q.symbol),
+          currencyIsEstimated: !q.currency && !exchangeCurrency,
+        };
+      });
 
     res.json(quotes);
   } catch (error) {
